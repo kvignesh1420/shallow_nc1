@@ -11,8 +11,8 @@ from shallow_collapse.model import DNNModel
 
 def prepare_data():
     # X = torch.randn(size=(N, 1), requires_grad=False)
-    X1 = torch.normal(mean=torch.tensor(-1), std=torch.tensor(0.3), size=(N//2, 10), requires_grad=False)
-    X2 = torch.normal(mean=torch.tensor(1), std=torch.tensor(0.3), size=(N//2, 10), requires_grad=False)
+    X1 = torch.normal(mean=torch.tensor(-1), std=torch.tensor(0.3), size=(N//2, 1), requires_grad=False)
+    X2 = torch.normal(mean=torch.tensor(1), std=torch.tensor(0.3), size=(N//2, 1), requires_grad=False)
     X = torch.concat((X1, X2))
     plt.plot(X.cpu().detach().numpy())
     plt.savefig("data.png")
@@ -85,7 +85,7 @@ def train(model, X, Y):
     # print("initial loss: {}".format(loss_criterion(X, Y)))
     optimizer = torch.optim.SGD(
         params=model.parameters(),
-        lr=0.001,
+        lr=0.01,
         momentum=0,
         weight_decay=5e-4
     )
@@ -111,7 +111,7 @@ def train(model, X, Y):
 
 if __name__ == "__main__":
     N = 100
-    batch_size = 10
+    batch_size = 100
     perm = torch.randperm(n=N)
     perm_inv = torch.argsort(perm)
     X, Y = prepare_data()
@@ -119,8 +119,8 @@ if __name__ == "__main__":
     non_linear_features = {}
     print(X.shape, Y.shape)
     args = {
-        "L": 1,
-        "in_features": 10,
+        "L": 2,
+        "in_features": 1,
         "hidden_features": 1000,
         "out_features": 1,
         "bias": True
