@@ -17,7 +17,7 @@ class DNNModel(torch.nn.Module):
         self.first_layer = torch.nn.Linear(
             in_features=self.in_features,
             out_features=self.hidden_features,
-            bias=self.bias
+            bias=True
         )
         self.hidden_layers = [self.first_layer]
         self.activation_layers = [torch.nn.ReLU()]
@@ -27,7 +27,7 @@ class DNNModel(torch.nn.Module):
             layer = torch.nn.Linear(
                 in_features=self.hidden_features,
                 out_features=self.hidden_features,
-                bias=self.bias
+                bias=False
             )
             self.hidden_layers.append(layer)
             self.activation_layers.append(torch.nn.Identity())
@@ -36,7 +36,7 @@ class DNNModel(torch.nn.Module):
         self.final_layer = torch.nn.Linear(
             in_features=self.hidden_features,
             out_features=self.out_features,
-            bias=self.bias
+            bias=False
         )
         self.hidden_layers.append(self.final_layer)
         self.activation_layers.append(torch.nn.Identity())

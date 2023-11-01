@@ -90,7 +90,7 @@ def train(model, X, Y):
         weight_decay=5e-4
     )
     num_batches = N//batch_size
-    for iter in tqdm(range(1000)):
+    for iter in tqdm(range(1)):
         for batch in range(num_batches):
             model.zero_grad()
             optimizer.zero_grad()
@@ -119,11 +119,12 @@ if __name__ == "__main__":
     non_linear_features = {}
     print(X.shape, Y.shape)
     args = {
-        "L": 2,
+        "L": 1,
         "in_features": 1,
-        "hidden_features": 1000,
+        "hidden_features": 100,
         "out_features": 1,
-        "bias": True
+        # ignore this as of now
+        "bias": True 
     }
     model = DNNModel(args=args)
     model = assign_hooks(model=model)
