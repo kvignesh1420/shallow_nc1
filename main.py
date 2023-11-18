@@ -85,12 +85,12 @@ def train(model, X, Y):
     # print("initial loss: {}".format(loss_criterion(X, Y)))
     optimizer = torch.optim.SGD(
         params=model.parameters(),
-        lr=0.01,
+        lr=0.001,
         momentum=0,
         weight_decay=5e-4
     )
     num_batches = N//batch_size
-    for iter in tqdm(range(1)):
+    for iter in tqdm(range(10000)):
         for batch in range(num_batches):
             model.zero_grad()
             optimizer.zero_grad()
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     args = {
         "L": 1,
         "in_features": 1,
-        "hidden_features": 100,
+        "hidden_features": 1000,
         "out_features": 1,
         # ignore this as of now
         "bias": True 
