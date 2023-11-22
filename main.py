@@ -29,12 +29,12 @@ def main():
     tracker = MetricTracker(context=context)
     trainer = Trainer(context=context)
     logging.info("Model: {}".format(model))
-    trainer.train(model=model, training_data=training_data)
-
+    trainer.forward_pass_at_init(model=model, training_data=training_data)
     tracker.compute_data_collapse_metrics(training_data=training_data)
     tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data)
     tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data)
     tracker.compute_nngp_nc1_hat_ratio()
+    trainer.train(model=model, training_data=training_data)
 
 if __name__ == "__main__":
     main()

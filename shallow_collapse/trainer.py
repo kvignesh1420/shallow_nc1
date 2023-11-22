@@ -25,6 +25,15 @@ class Trainer():
         plt.savefig("pred.png")
         plt.clf()
 
+    def forward_pass_at_init(self, model, training_data):
+        assert model.pre_activations == {}
+        assert model.post_activations == {}
+        X = training_data.X
+        model.zero_grad()
+        _ = model(X)
+        assert model.pre_activations != {}
+        assert model.post_activations != {}
+
     def train(self, model, training_data):
         N = self.context["N"]
         BATCH_SIZE = self.context["BATCH_SIZE"]

@@ -92,7 +92,6 @@ class MetricTracker():
         logger.info("\nmetrics of layer-wise post-activations:\n{}".format(post_activation_collapse_metrics_df))
 
     def compute_nngp_nc1_hat_ratio(self):
-        assert self.context["NUM_EPOCHS"] == 1
         data_nc1_hat = self.data_collapse_metrics[-1]["trace_S_W_div_S_B"]
         post_activations_nc1_hat = self.post_activation_collapse_metrics[self.context["L"]-2]["trace_S_W_div_S_B"]
         nngp_nc1_hat_ratio = post_activations_nc1_hat/data_nc1_hat
