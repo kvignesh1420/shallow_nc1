@@ -17,7 +17,7 @@ def main():
     context = {
         "N": 100,
         "BATCH_SIZE": 100,
-        "NUM_EPOCHS": 1000,
+        "NUM_EPOCHS": 2000,
         "L": 2,
         "in_features": 1,
         "hidden_features": 128,
@@ -30,7 +30,7 @@ def main():
     trainer = Trainer(context=context, tracker=tracker)
     logging.info("Model: {}".format(model))
     trainer.forward_pass_at_init(model=model, training_data=training_data)
-    trainer.train(model=model, training_data=training_data, probe_ntk_features=True)
+    trainer.train(model=model, training_data=training_data, probe_features=True, probe_ntk_features=True)
 
 if __name__ == "__main__":
     main()

@@ -1,9 +1,11 @@
 import logging
 logger = logging.getLogger(__name__)
+from collections import OrderedDict
 from typing import Dict, Any, List, Optional
 import pandas as pd
 import torch
 from torch_scatter import scatter
+import matplotlib.pyplot as plt
 
 class MetricTracker():
     """
@@ -13,6 +15,10 @@ class MetricTracker():
     """
     def __init__(self, context: Dict[str, Any]) -> None:
         self.context = context
+        self.epoch_ntk_collapse_metrics = OrderedDict()
+        self.epoch_post_activation_collapse_metrics = OrderedDict()
+        self.epoch_loss = OrderedDict()
+        self.epoch_accuracy = OrderedDict()
 
     @staticmethod
     @torch.no_grad()
@@ -68,12 +74,24 @@ class MetricTracker():
         return collapse_metrics
 
     def compute_ntk_collapse_metrics(self, training_data, ntk_feat_matrix, epoch):
+        layer_idx = -1
         self.ntk_collapse_metrics = self.compute_layerwise_nc1(
-            features={-1: ntk_feat_matrix},
+            features={layer_idx: ntk_feat_matrix},
             labels=training_data.labels
         )
         ntk_collapse_metrics_df = pd.DataFrame.from_dict(self.ntk_collapse_metrics)
         logger.info("\nmetrics of empirical NTK at epoch {}:\n{}".format(epoch, ntk_collapse_metrics_df))
+        self.epoch_ntk_collapse_metrics[epoch] = self.ntk_collapse_metrics[layer_idx]
+
+    def plot_ntk_collapse_metrics(self):
+        x = list(self.epoch_ntk_collapse_metrics.keys())
+        values = list(self.epoch_ntk_collapse_metrics.values())
+        df = pd.DataFrame(values, index=x).astype(float)
+        logging.info(df)
+        df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
+        df.plot(grid=True, xlabel="epoch", ylabel="NC1")
+        plt.savefig("ntk_nc_metrics.jpg")
+        plt.clf()
 
     def compute_data_collapse_metrics(self, training_data):
         self.data_collapse_metrics = self.compute_layerwise_nc1(
@@ -83,21 +101,56 @@ class MetricTracker():
         data_collapse_metrics_df = pd.DataFrame.from_dict(self.data_collapse_metrics)
         logger.info("\nmetrics of data:\n{}".format(data_collapse_metrics_df))
 
-    def compute_pre_activation_collapse_metrics(self, model, training_data):
+    def compute_pre_activation_collapse_metrics(self, model, training_data, epoch):
         self.pre_activation_collapse_metrics = self.compute_layerwise_nc1(
             features=model.pre_activations,
             labels=training_data.labels
         )
         pre_activation_collapse_metrics_df = pd.DataFrame.from_dict(self.pre_activation_collapse_metrics)
-        logger.info("\nmetrics of layer-wise pre-activations:\n{}".format(pre_activation_collapse_metrics_df))
+        logger.info("\nmetrics of layer-wise pre-activations at epoch {}:\n{}".format(epoch, pre_activation_collapse_metrics_df))
 
-    def compute_post_activation_collapse_metrics(self, model, training_data):
+    def compute_post_activation_collapse_metrics(self, model, training_data, epoch):
         self.post_activation_collapse_metrics = self.compute_layerwise_nc1(
             features=model.post_activations,
             labels=training_data.labels
         )
         post_activation_collapse_metrics_df = pd.DataFrame.from_dict(self.post_activation_collapse_metrics)
-        logger.info("\nmetrics of layer-wise post-activations:\n{}".format(post_activation_collapse_metrics_df))
+        logger.info("\nmetrics of layer-wise post-activations at epoch {}:\n{}".format(epoch, post_activation_collapse_metrics_df))
+        self.epoch_post_activation_collapse_metrics[epoch] = self.post_activation_collapse_metrics[self.context["L"]-2]
+
+    def plot_post_activation_collapse_metrics(self):
+        x = list(self.epoch_post_activation_collapse_metrics.keys())
+        values = list(self.epoch_post_activation_collapse_metrics.values())
+        df = pd.DataFrame(values, index=x).astype(float)
+        logging.info(df)
+        df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
+        df.plot(grid=True, xlabel="epoch", ylabel="NC1")
+        plt.savefig("post_activation_nc_metrics.jpg")
+        plt.clf()
+
+    def store_loss(self, loss, epoch):
+        self.epoch_loss[epoch] = {"loss": loss}
+
+    def plot_loss(self):
+        x = list(self.epoch_loss.keys())
+        values = list(self.epoch_loss.values())
+        df = pd.DataFrame(values, index=x).astype(float)
+        logging.info(df)
+        df.plot(grid=True, xlabel="epoch", ylabel="loss")
+        plt.savefig("loss.jpg")
+        plt.clf()
+
+    def store_accuracy(self, accuracy, epoch):
+        self.epoch_accuracy[epoch] = {"accuracy": accuracy}
+
+    def plot_accuracy(self):
+        x = list(self.epoch_accuracy.keys())
+        values = list(self.epoch_accuracy.values())
+        df = pd.DataFrame(values, index=x).astype(float)
+        logging.info(df)
+        df.plot(grid=True, xlabel="epoch", ylabel="accuracy")
+        plt.savefig("accuracy.jpg")
+        plt.clf()
 
     def compute_nngp_nc1_hat_ratio(self):
         data_nc1_hat = self.data_collapse_metrics[-1]["trace_S_W_div_S_B"]

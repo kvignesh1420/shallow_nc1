@@ -37,8 +37,9 @@ class Trainer():
         assert model.pre_activations != {}
         assert model.post_activations != {}
         self.tracker.compute_data_collapse_metrics(training_data=training_data)
-        self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data)
-        self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data)
+        # enable if necessary
+        # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=0)
+        self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=0)
         self.tracker.compute_nngp_nc1_hat_ratio()
 
     def prepare_ntk_feat_matrix(self, model, training_data):
@@ -65,7 +66,7 @@ class Trainer():
         logger.info("ntk_feat_matrx shape: {}".format(ntk_feat_matrix.shape))
         return ntk_feat_matrix
 
-    def train(self, model, training_data, probe_ntk_features=False):
+    def train(self, model, training_data, probe_features=False, probe_ntk_features=False):
         N = self.context["N"]
         BATCH_SIZE = self.context["BATCH_SIZE"]
         NUM_EPOCHS = self.context["NUM_EPOCHS"]
@@ -91,7 +92,19 @@ class Trainer():
                 loss.backward()
                 optimizer.step()
             if epoch%100 == 0:
-                print("epoch: {} loss: {}".format(epoch, loss.cpu().detach().numpy()))
+                loss_value = loss.cpu().detach().numpy()
+                logger.info("epoch: {} loss: {}".format(epoch, loss_value))
+                self.tracker.store_loss(loss=loss_value, epoch=epoch)
+                with torch.no_grad():
+                    model.zero_grad()
+                    pred=model(X)
+                    accuracy = self.compute_accuracy(pred=pred, labels=training_data.labels)
+                    accuracy_value = accuracy.cpu().detach().numpy()
+                self.tracker.store_accuracy(accuracy=accuracy_value, epoch=epoch)
+                if probe_features:
+                    # enable if necessary
+                    # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
+                    self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
                 if probe_ntk_features:
                     self.ntk_feat_matrix = self.prepare_ntk_feat_matrix(model=model, training_data=training_data)
                     self.tracker.compute_ntk_collapse_metrics(
@@ -100,8 +113,13 @@ class Trainer():
                         epoch=epoch
                     )
 
-
         pred=model(X)
-        acc = self.compute_accuracy(pred=pred, labels=training_data.labels)
-        logger.info("accuracy: {}".format(acc.cpu().detach().numpy()))
+        accuracy = self.compute_accuracy(pred=pred, labels=training_data.labels)
+        logger.info("accuracy: {}".format(accuracy.cpu().detach().numpy()))
         self.plot_pred(pred[training_data.perm_inv].detach().cpu().numpy())
+        self.tracker.plot_loss()
+        self.tracker.plot_accuracy()
+        if probe_features:
+            self.tracker.plot_post_activation_collapse_metrics()
+        if probe_ntk_features:
+            self.tracker.plot_ntk_collapse_metrics()
