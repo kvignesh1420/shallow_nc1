@@ -95,6 +95,7 @@ class Trainer():
                 loss_value = loss.cpu().detach().numpy()
                 logger.info("epoch: {} loss: {}".format(epoch, loss_value))
                 self.tracker.store_loss(loss=loss_value, epoch=epoch)
+                # ensure an entire pass over the data before the NC metrics are computed
                 with torch.no_grad():
                     model.zero_grad()
                     pred=model(X)
@@ -104,7 +105,9 @@ class Trainer():
                 if probe_features:
                     # enable if necessary
                     # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
+                    logger.info("pred shape: {}".format(pred.shape))
                     self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
+                    self.tracker.compute_pred_collapse_metrics(pred=pred, training_data=training_data, epoch=epoch)
                 if probe_ntk_features:
                     self.ntk_feat_matrix = self.prepare_ntk_feat_matrix(model=model, training_data=training_data)
                     self.tracker.compute_ntk_collapse_metrics(
@@ -121,5 +124,6 @@ class Trainer():
         self.tracker.plot_accuracy()
         if probe_features:
             self.tracker.plot_post_activation_collapse_metrics()
+            self.tracker.plot_pred_collapse_metrics()
         if probe_ntk_features:
             self.tracker.plot_ntk_collapse_metrics()

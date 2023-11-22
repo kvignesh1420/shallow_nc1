@@ -17,6 +17,7 @@ class MetricTracker():
         self.context = context
         self.epoch_ntk_collapse_metrics = OrderedDict()
         self.epoch_post_activation_collapse_metrics = OrderedDict()
+        self.epoch_pred_collapse_metrics = OrderedDict()
         self.epoch_loss = OrderedDict()
         self.epoch_accuracy = OrderedDict()
 
@@ -126,6 +127,26 @@ class MetricTracker():
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
         plt.savefig("post_activation_nc_metrics.jpg")
+        plt.clf()
+
+    def compute_pred_collapse_metrics(self, pred, training_data, epoch):
+        layer_idx=-1
+        self.pred_collapse_metrics = self.compute_layerwise_nc1(
+            features={layer_idx: pred},
+            labels=training_data.labels
+        )
+        pred_collapse_metrics_df = pd.DataFrame.from_dict(self.pred_collapse_metrics)
+        logger.info("\nmetrics of model predictions at epoch {}:\n{}".format(epoch, pred_collapse_metrics_df))
+        self.epoch_pred_collapse_metrics[epoch] = self.pred_collapse_metrics[layer_idx]
+
+    def plot_pred_collapse_metrics(self):
+        x = list(self.epoch_pred_collapse_metrics.keys())
+        values = list(self.epoch_pred_collapse_metrics.values())
+        df = pd.DataFrame(values, index=x).astype(float)
+        logging.info(df)
+        df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
+        df.plot(grid=True, xlabel="epoch", ylabel="NC1")
+        plt.savefig("pred_nc_metrics.jpg")
         plt.clf()
 
     def store_loss(self, loss, epoch):
