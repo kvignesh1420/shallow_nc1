@@ -17,24 +17,20 @@ def main():
     context = {
         "N": 100,
         "BATCH_SIZE": 100,
-        "NUM_EPOCHS": 1,
+        "NUM_EPOCHS": 1000,
         "L": 2,
         "in_features": 1,
-        "hidden_features": 2000,
+        "hidden_features": 128,
         "out_features": 1
     }
     logging.info("context: \n{}".format(context))
     training_data = Gaussian1D(context=context)
     model = MLPModel(context=context)
     tracker = MetricTracker(context=context)
-    trainer = Trainer(context=context)
+    trainer = Trainer(context=context, tracker=tracker)
     logging.info("Model: {}".format(model))
     trainer.forward_pass_at_init(model=model, training_data=training_data)
-    tracker.compute_data_collapse_metrics(training_data=training_data)
-    tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data)
-    tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data)
-    tracker.compute_nngp_nc1_hat_ratio()
-    trainer.train(model=model, training_data=training_data)
+    trainer.train(model=model, training_data=training_data, probe_ntk_features=True)
 
 if __name__ == "__main__":
     main()

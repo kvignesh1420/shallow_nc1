@@ -67,6 +67,14 @@ class MetricTracker():
             collapse_metrics[layer_idx]["trace_S_B"] = torch.trace(S_B).detach().cpu().numpy()
         return collapse_metrics
 
+    def compute_ntk_collapse_metrics(self, training_data, ntk_feat_matrix, epoch):
+        self.ntk_collapse_metrics = self.compute_layerwise_nc1(
+            features={-1: ntk_feat_matrix},
+            labels=training_data.labels
+        )
+        ntk_collapse_metrics_df = pd.DataFrame.from_dict(self.ntk_collapse_metrics)
+        logger.info("\nmetrics of empirical NTK at epoch {}:\n{}".format(epoch, ntk_collapse_metrics_df))
+
     def compute_data_collapse_metrics(self, training_data):
         self.data_collapse_metrics = self.compute_layerwise_nc1(
             features={-1: training_data.X},
