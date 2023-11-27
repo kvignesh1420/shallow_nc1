@@ -58,11 +58,14 @@ def main():
         "training_data_cls": "Gaussian1D",
         "N": 200,
         "BATCH_SIZE": 200,
-        "NUM_EPOCHS": 1000,
+        "NUM_EPOCHS": 1,
         "L": 2,
         "in_features": 1,
         "hidden_features": 1024,
-        "out_features": 1
+        "out_features": 1,
+        "lr": 1e-4,
+        "weight_decay": 5e-4,
+        "bias_std": 1
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(

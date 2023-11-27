@@ -96,9 +96,9 @@ class Trainer():
         loss_criterion = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(
             params=model.parameters(),
-            lr=0.0001,
+            lr=self.context["lr"],
             momentum=0,
-            weight_decay=5e-4
+            weight_decay=self.context["weight_decay"]
         )
         num_batches = N//BATCH_SIZE
         logger.debug("Number of batches: {}".format(num_batches))
