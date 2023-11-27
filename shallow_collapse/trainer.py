@@ -96,7 +96,7 @@ class Trainer():
         loss_criterion = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(
             params=model.parameters(),
-            lr=0.0002,
+            lr=0.0001,
             momentum=0,
             weight_decay=5e-4
         )

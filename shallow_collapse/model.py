@@ -29,7 +29,7 @@ class MLPModel(torch.nn.Module):
             bias=True
         )
         torch.nn.init.kaiming_normal_(self.first_layer.weight, nonlinearity="relu")
-        torch.nn.init.normal_(self.first_layer.bias)
+        torch.nn.init.normal_(self.first_layer.bias, std=1)
         self.hidden_layers = [self.first_layer]
         self.activation_layers = [torch.nn.ReLU()]
         # self.normalization_layers = [torch.nn.BatchNorm1d(self.hidden_features)]
@@ -41,7 +41,7 @@ class MLPModel(torch.nn.Module):
                 bias=True
             )
             torch.nn.init.kaiming_normal_(layer.weight, nonlinearity="relu")
-            torch.nn.init.normal_(layer.bias)
+            torch.nn.init.normal_(layer.bias, std=1)
             self.hidden_layers.append(layer)
             self.activation_layers.append(torch.nn.Identity())
             # self.normalization_layers.append(torch.nn.BatchNorm1d(self.hidden_features))
@@ -52,7 +52,7 @@ class MLPModel(torch.nn.Module):
             bias=True
         )
         torch.nn.init.kaiming_normal_(self.final_layer.weight, nonlinearity="relu")
-        torch.nn.init.normal_(self.final_layer.bias)
+        torch.nn.init.normal_(self.final_layer.bias, std=1)
         self.hidden_layers.append(self.final_layer)
         self.activation_layers.append(torch.nn.Identity())
 

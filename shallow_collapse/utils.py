@@ -305,7 +305,7 @@ class MetricTracker():
                 theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
                 val = (torch.pi - theta) /(2*torch.pi)
                 nngp_layer1_relu_derivative[i,j] = val
-        self.ntk_layer2 = nngp_layer2 + ntk_layer1 * nngp_layer1_relu_derivative * sigma_w_sq
+        self.ntk_layer2 = nngp_layer2 + ntk_layer1 * nngp_layer1_relu_derivative
         return self.ntk_layer2
 
     def plot_limiting_ntk_matrix(self, training_data):
