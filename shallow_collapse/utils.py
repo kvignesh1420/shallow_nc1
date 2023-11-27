@@ -4,8 +4,10 @@ from collections import OrderedDict
 from typing import Dict, Any, List, Optional
 import pandas as pd
 import torch
+import torch.nn.functional as F
 from torch_scatter import scatter
 import matplotlib.pyplot as plt
+from shallow_collapse.data import Circle2D
 
 class MetricTracker():
     """
@@ -91,7 +93,7 @@ class MetricTracker():
         logging.info(df)
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
-        plt.savefig("ntk_nc_metrics.jpg")
+        plt.savefig("{}ntk_nc_metrics.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
     def compute_data_collapse_metrics(self, training_data):
@@ -126,7 +128,7 @@ class MetricTracker():
         logging.info(df)
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
-        plt.savefig("post_activation_nc_metrics.jpg")
+        plt.savefig("{}post_activation_nc_metrics.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
     def compute_pred_collapse_metrics(self, pred, training_data, epoch):
@@ -146,7 +148,7 @@ class MetricTracker():
         logging.info(df)
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
-        plt.savefig("pred_nc_metrics.jpg")
+        plt.savefig("{}pred_nc_metrics.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
     def store_loss(self, loss, epoch):
@@ -158,7 +160,7 @@ class MetricTracker():
         df = pd.DataFrame(values, index=x).astype(float)
         logging.info(df)
         df.plot(grid=True, xlabel="epoch", ylabel="loss")
-        plt.savefig("loss.jpg")
+        plt.savefig("{}loss.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
     def store_accuracy(self, accuracy, epoch):
@@ -170,11 +172,185 @@ class MetricTracker():
         df = pd.DataFrame(values, index=x).astype(float)
         logging.info(df)
         df.plot(grid=True, xlabel="epoch", ylabel="accuracy")
-        plt.savefig("accuracy.jpg")
+        plt.savefig("{}accuracy.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
-    def compute_nngp_nc1_hat_ratio(self):
+    def compute_empirical_nngp_nc1_hat_ratio(self):
         data_nc1_hat = self.data_collapse_metrics[-1]["trace_S_W_div_S_B"]
         post_activations_nc1_hat = self.post_activation_collapse_metrics[self.context["L"]-2]["trace_S_W_div_S_B"]
         nngp_nc1_hat_ratio = post_activations_nc1_hat/data_nc1_hat
         logger.info("\npost_activations_nc1_hat/data_nc1_hat: {}\n".format(nngp_nc1_hat_ratio))
+
+    def _compute_kernel_nc1(self, K):
+        """
+        Make sure that the kernel matrix is ordered in blocks. The nngp
+        limiting kernel takes care of it by default. We assume 2 classes.
+        """
+        N = self.context["N"]
+        n = N//2
+        Tr_Sigma_W = 0
+        Tr_Sigma_B = 0
+        block1_sum = torch.sum( K[0:n, 0:n] )
+        block2_sum = torch.sum( K[n:2*n, n:2*n] )
+        Tr_Sigma_W = (0.5/n)*torch.sum(torch.diag(K)) - (0.5/(n*n))*(block1_sum + block2_sum)
+        logger.info("Tr_Sigma_W: {}".format(Tr_Sigma_W))
+        Tr_Sigma_B = (0.5/(n*n))*(block1_sum + block2_sum) - (0.25/(n*n))*torch.sum(K)
+        logger.info("Tr_Sigma_B: {}".format(Tr_Sigma_B))
+        return Tr_Sigma_W/Tr_Sigma_B
+
+
+    def compute_limiting_nngp_matrix(self, training_data):
+        """
+        Since we use kaiming_normal init for weights with 2d data and
+        standard normal init for bias, we have \sigma_w^2 = 2,
+        \sigma_b^2 = 1.
+        """
+        sigma_b_sq = 1
+        sigma_w_sq = 2
+        X = training_data.X[training_data.perm_inv]
+        self.nngp_layer1 = sigma_b_sq + (sigma_w_sq/self.context["in_features"])*(X @ X.t())
+        N = self.context["N"]
+        self.nngp_layer1_relu = torch.empty_like(self.nngp_layer1)
+        for i in range(N):
+            for j in range(N):
+                K_ii = self.nngp_layer1[i, i]
+                K_ij = self.nngp_layer1[i, j]
+                K_jj = self.nngp_layer1[j, j]
+                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
+                val = (torch.sqrt(K_ii*K_jj)*( torch.sin(theta) + (torch.pi - theta)*torch.cos(theta) )) /(2*torch.pi)
+                self.nngp_layer1_relu[i,j] = val
+        return self.nngp_layer1_relu
+
+    def plot_limiting_nngp_matrix(self, training_data):
+        N=self.context["N"]
+        limiting_nngp_matrix = self.compute_limiting_nngp_matrix(training_data=training_data)
+        plt.imshow(limiting_nngp_matrix, cmap='viridis')
+        plt.colorbar()
+        plt.savefig("{}limiting_nngp_matrix.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_limiting_nngp_circlar2d(self, training_data):
+        """
+        Use only for cicular data
+        """
+        assert isinstance(training_data, Circle2D)
+        N=self.context["N"]
+        angles = training_data.thetas[training_data.perm_inv]
+        limiting_nngp_matrix = self.compute_limiting_nngp_matrix(training_data=training_data)
+        sim = limiting_nngp_matrix[N//2]
+        plt.plot(angles, sim)
+        plt.xlabel("angle (x,x')")
+        plt.ylabel("Limiting NNGP")
+        plt.grid()
+        plt.savefig("{}limiting_nngp_angle_sim.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_empirical_nngp_matrix(self, model, training_data):
+        features = model.post_activations[self.context["L"]-2]
+        features = features[training_data.perm_inv]
+        normalized_features = F.normalize(features, p=2, dim=1)
+        nngp_matrix = normalized_features @ normalized_features.t()
+        plt.imshow(nngp_matrix, cmap='viridis')
+        plt.colorbar()
+        plt.savefig("{}empirical_nngp_matrix.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_empirical_nngp_circular2d(self, model, training_data):
+        """
+        Use only for cicular data
+        """
+        assert isinstance(training_data, Circle2D)
+        N=self.context["N"]
+        features = model.post_activations[self.context["L"]-2]
+        angles = training_data.thetas[training_data.perm_inv]
+        features = features[training_data.perm_inv]
+        normalized_features = F.normalize(features, p=2, dim=1)
+        nngp_matrix = normalized_features @ normalized_features.t()
+        sim = nngp_matrix[N//2]
+        plt.plot(angles, sim)
+        plt.xlabel("angle (x,x')")
+        plt.ylabel("Empirical NNGP")
+        plt.grid()
+        plt.savefig("{}empirical_nngp_angle_sim.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def compute_limiting_ntk_matrix(self, training_data):
+        N = self.context["N"]
+        sigma_b_sq = 1
+        sigma_w_sq = 2
+        self.compute_limiting_nngp_matrix(training_data=training_data)
+        nngp_layer2 = sigma_b_sq + sigma_w_sq*self.nngp_layer1_relu
+        ntk_layer1 = self.nngp_layer1
+        nngp_layer1_relu_derivative = torch.empty_like(self.nngp_layer1)
+        for i in range(N):
+            for j in range(N):
+                K_ii = self.nngp_layer1[i, i]
+                K_ij = self.nngp_layer1[i, j]
+                K_jj = self.nngp_layer1[j, j]
+                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
+                val = (torch.pi - theta) /(2*torch.pi)
+                nngp_layer1_relu_derivative[i,j] = val
+        self.ntk_layer2 = nngp_layer2 + ntk_layer1 * nngp_layer1_relu_derivative * sigma_w_sq
+        return self.ntk_layer2
+
+    def plot_limiting_ntk_matrix(self, training_data):
+        """
+        Plot the kernel matrix of the limiting ntk
+        """
+        limiting_ntk_matrix = self.compute_limiting_ntk_matrix(training_data=training_data)
+        # normalize to unit peak
+        limiting_ntk_matrix = limiting_ntk_matrix/torch.max(limiting_ntk_matrix)
+        plt.imshow(limiting_ntk_matrix, cmap='viridis')
+        plt.colorbar()
+        plt.savefig("{}limiting_ntk_matrix.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_limiting_ntk_circular2d(self, training_data):
+        """
+        Use only for cicular data
+        """
+        assert isinstance(training_data, Circle2D)
+        N=self.context["N"]
+        angles = training_data.thetas[training_data.perm_inv]
+        limiting_ntk_matrix = self.compute_limiting_ntk_matrix(training_data=training_data)
+        # normalize to unit peak
+        limiting_ntk_matrix = limiting_ntk_matrix/torch.max(limiting_ntk_matrix)
+        # select the N//2-1 th row as that the thetas defined in the Circular2D data class
+        # corresponding to this data point.
+        sim = limiting_ntk_matrix[N//2]
+        plt.plot(angles, sim)
+        plt.xlabel("angle (x,x')")
+        plt.ylabel("Limiting NTK")
+        plt.grid()
+        plt.savefig("{}limiting_ntk_angle_sim.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_empirical_ntk_matrix(self, training_data, ntk_feat_matrix, epoch):
+        features = ntk_feat_matrix
+        features = features[training_data.perm_inv]
+        normalized_features = F.normalize(features, p=2, dim=1)
+        limiting_ntk_matrix = normalized_features @ normalized_features.t()
+        plt.imshow(limiting_ntk_matrix, cmap='viridis')
+        plt.colorbar()
+        plt.savefig("{}empirical_ntk_matrix_epoch{}.jpg".format(self.context["vis_dir"], epoch))
+        plt.clf()
+
+    def plot_empirical_ntk_circular2d(self, training_data, ntk_feat_matrix, epoch):
+        """
+        Use only for cicular data
+        """
+        assert isinstance(training_data, Circle2D)
+        N=self.context["N"]
+        features = ntk_feat_matrix
+        angles = training_data.thetas[training_data.perm_inv]
+        features = features[training_data.perm_inv]
+        normalized_features = F.normalize(features, p=2, dim=1)
+        limiting_ntk_matrix = normalized_features @ normalized_features.t()
+        sim = limiting_ntk_matrix[N//2]
+        plt.plot(angles, sim)
+        plt.xlabel("angle (x,x')")
+        plt.ylabel("Empirical NTK")
+        plt.grid()
+        plt.savefig("{}empirical_ntk_angle_sim_epoch{}.jpg".format(self.context["vis_dir"], epoch))
+        plt.clf()
+

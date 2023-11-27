@@ -1,3 +1,6 @@
+import os
+import json
+import hashlib
 import sys
 import logging
 import torch
@@ -9,22 +12,63 @@ torch.manual_seed(3)
 #   from the get go!
 from shallow_collapse.model import MLPModel
 from shallow_collapse.data import Gaussian1D
+from shallow_collapse.data import Circle2D
 from shallow_collapse.utils import MetricTracker
 from shallow_collapse.trainer import Trainer
 
+data_cls_map = {
+    "Gaussian1D": Gaussian1D,
+    "Circle2D": Circle2D
+}
+
+def prepare_config_hash(context):
+    _string_context = json.dumps(context, sort_keys=True).encode("utf-8")
+    parsed_context_hash = hashlib.md5(_string_context).hexdigest()
+    return parsed_context_hash
+
+def setup_runtime_context(context):
+    # create a unique hash for the model
+    if context["training_data_cls"] not in data_cls_map:
+        sys.exit("Invalid training_data_cls. Choose from {}".format(list(data_cls_map.keys())))
+    config_uuid = prepare_config_hash(context=context)
+    context["config_uuid"] = config_uuid
+    context["device"] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    context["out_dir"] = "out/"
+    vis_dir = context["out_dir"] + context["config_uuid"] + "/plots/"
+    results_dir = context["out_dir"] + context["config_uuid"] + "/results/"
+    results_file = results_dir + "run.txt"
+    if not os.path.exists(vis_dir):
+        print("Vis folder does not exist. Creating one!")
+        os.makedirs(vis_dir)
+    if not os.path.exists(results_dir):
+        print("Resuls folder does not exist. Creating one!")
+        os.makedirs(results_dir)
+    context["vis_dir"] = vis_dir
+    context["results_file"] = results_file
+
+    return context
+
+
 def main():
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-    context = {
-        "N": 100,
-        "BATCH_SIZE": 100,
-        "NUM_EPOCHS": 2000,
+    exp_context = {
+        "training_data_cls": "Gaussian1D",
+        "N": 200,
+        "BATCH_SIZE": 200,
+        "NUM_EPOCHS": 1,
         "L": 2,
         "in_features": 1,
-        "hidden_features": 128,
+        "hidden_features": 1024,
         "out_features": 1
     }
+    context = setup_runtime_context(context=exp_context)
+    logging.basicConfig(
+        filename=context["results_file"],
+        filemode='a',
+        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+        level=logging.INFO
+    )
     logging.info("context: \n{}".format(context))
-    training_data = Gaussian1D(context=context)
+    training_data = data_cls_map[context["training_data_cls"]](context=context)
     model = MLPModel(context=context)
     tracker = MetricTracker(context=context)
     trainer = Trainer(context=context, tracker=tracker)

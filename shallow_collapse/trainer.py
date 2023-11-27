@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import copy
 from shallow_collapse.utils import MetricTracker
+from shallow_collapse.data import Circle2D
 
 class Trainer():
     """
@@ -25,8 +26,27 @@ class Trainer():
 
     def plot_pred(self, pred):
         plt.plot(pred)
-        plt.savefig("pred.png")
+        plt.savefig("{}pred.jpg".format(self.context["vis_dir"]))
         plt.clf()
+
+    def _compute_kernel_stats_at_init(self, model, training_data):
+
+        self.tracker.plot_empirical_nngp_matrix(model=model, training_data=training_data)
+        limiting_nngp_matrix = self.tracker.compute_limiting_nngp_matrix(training_data=training_data)
+        self.tracker.plot_limiting_nngp_matrix(training_data=training_data)
+        kernel_nc1 = self.tracker._compute_kernel_nc1(K=limiting_nngp_matrix)
+        logger.info("Limiting NNGP NC1: {}".format(kernel_nc1))
+        if isinstance(training_data, Circle2D):
+            self.tracker.plot_limiting_nngp_circlar2d(training_data=training_data)
+
+        limiting_ntk_matrix = self.tracker.compute_limiting_ntk_matrix(training_data=training_data)
+        # normalize to unit peak
+        limiting_ntk_matrix = limiting_ntk_matrix/torch.max(limiting_ntk_matrix)
+        self.tracker.plot_limiting_ntk_matrix(training_data=training_data)
+        kernel_nc1 = self.tracker._compute_kernel_nc1(K=limiting_ntk_matrix)
+        logger.info("Limiting NTK NC1: {}".format(kernel_nc1))
+        if isinstance(training_data, Circle2D):
+            self.tracker.plot_limiting_ntk_circular2d(training_data=training_data)
 
     def forward_pass_at_init(self, model, training_data):
         assert model.pre_activations == {}
@@ -40,7 +60,8 @@ class Trainer():
         # enable if necessary
         # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=0)
         self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=0)
-        self.tracker.compute_nngp_nc1_hat_ratio()
+        self.tracker.compute_empirical_nngp_nc1_hat_ratio()
+        self._compute_kernel_stats_at_init(model=model, training_data=training_data)
 
     def prepare_ntk_feat_matrix(self, model, training_data):
         X = training_data.X
@@ -75,7 +96,7 @@ class Trainer():
         loss_criterion = torch.nn.MSELoss()
         optimizer = torch.optim.SGD(
             params=model.parameters(),
-            lr=0.005,
+            lr=0.0002,
             momentum=0,
             weight_decay=5e-4
         )
@@ -115,6 +136,17 @@ class Trainer():
                         training_data=training_data,
                         epoch=epoch
                     )
+                    self.tracker.plot_empirical_ntk_matrix(
+                        ntk_feat_matrix=self.ntk_feat_matrix,
+                        training_data=training_data,
+                        epoch=epoch
+                    )
+                    if isinstance(training_data, Circle2D):
+                        self.tracker.plot_empirical_ntk_matrix(
+                            ntk_feat_matrix=self.ntk_feat_matrix,
+                            training_data=training_data,
+                            epoch=epoch
+                        )
 
         pred=model(X)
         accuracy = self.compute_accuracy(pred=pred, labels=training_data.labels)
