@@ -175,13 +175,26 @@ class MetricTracker():
         plt.savefig("{}accuracy.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
+    def plot_kernel_spectrum(self, K, filename):
+        """
+        Plot the spectrum of the kernel
+        """
+        S = torch.linalg.svdvals(K)
+        log2_S = torch.log2(S)
+        plt.plot(log2_S)
+        plt.xlabel("k")
+        plt.ylabel("$\log_2(\lambda_k)$")
+        plt.grid()
+        plt.savefig("{}{}".format(self.context["vis_dir"], filename))
+        plt.clf()
+
     def compute_empirical_nngp_nc1_hat_ratio(self):
         data_nc1_hat = self.data_collapse_metrics[-1]["trace_S_W_div_S_B"]
         post_activations_nc1_hat = self.post_activation_collapse_metrics[self.context["L"]-2]["trace_S_W_div_S_B"]
         nngp_nc1_hat_ratio = post_activations_nc1_hat/data_nc1_hat
         logger.info("\npost_activations_nc1_hat/data_nc1_hat: {}\n".format(nngp_nc1_hat_ratio))
 
-    def _compute_kernel_nc1(self, K):
+    def compute_kernel_nc1(self, K):
         """
         Make sure that the kernel matrix is ordered in blocks. The nngp
         limiting kernel takes care of it by default. We assume 2 classes.
@@ -228,6 +241,7 @@ class MetricTracker():
         plt.colorbar()
         plt.savefig("{}limiting_nngp_matrix.jpg".format(self.context["vis_dir"]))
         plt.clf()
+        self.plot_kernel_spectrum(K=limiting_nngp_matrix, filename="limiting_nngp_spectrum.jpg")
 
     def plot_limiting_nngp_circlar2d(self, training_data):
         """
@@ -254,6 +268,7 @@ class MetricTracker():
         plt.colorbar()
         plt.savefig("{}empirical_nngp_matrix.jpg".format(self.context["vis_dir"]))
         plt.clf()
+        self.plot_kernel_spectrum(K=nngp_matrix, filename="empirical_nngp_spectrum.jpg")
 
     def plot_empirical_nngp_circular2d(self, model, training_data):
         """
@@ -304,6 +319,7 @@ class MetricTracker():
         plt.colorbar()
         plt.savefig("{}limiting_ntk_matrix.jpg".format(self.context["vis_dir"]))
         plt.clf()
+        self.plot_kernel_spectrum(K=limiting_ntk_matrix, filename="limiting_ntk_spectrum.jpg")
 
     def plot_limiting_ntk_circular2d(self, training_data):
         """
@@ -329,11 +345,12 @@ class MetricTracker():
         features = ntk_feat_matrix
         features = features[training_data.perm_inv]
         normalized_features = F.normalize(features, p=2, dim=1)
-        limiting_ntk_matrix = normalized_features @ normalized_features.t()
-        plt.imshow(limiting_ntk_matrix, cmap='viridis')
+        empirical_ntk_matrix = normalized_features @ normalized_features.t()
+        plt.imshow(empirical_ntk_matrix, cmap='viridis')
         plt.colorbar()
         plt.savefig("{}empirical_ntk_matrix_epoch{}.jpg".format(self.context["vis_dir"], epoch))
         plt.clf()
+        self.plot_kernel_spectrum(K=empirical_ntk_matrix, filename="empirical_ntk_spectrum_epoch{}.jpg".format(epoch))
 
     def plot_empirical_ntk_circular2d(self, training_data, ntk_feat_matrix, epoch):
         """
@@ -345,8 +362,8 @@ class MetricTracker():
         angles = training_data.thetas[training_data.perm_inv]
         features = features[training_data.perm_inv]
         normalized_features = F.normalize(features, p=2, dim=1)
-        limiting_ntk_matrix = normalized_features @ normalized_features.t()
-        sim = limiting_ntk_matrix[N//2]
+        empirical_ntk_matrix = normalized_features @ normalized_features.t()
+        sim = empirical_ntk_matrix[N//2]
         plt.plot(angles, sim)
         plt.xlabel("angle (x,x')")
         plt.ylabel("Empirical NTK")

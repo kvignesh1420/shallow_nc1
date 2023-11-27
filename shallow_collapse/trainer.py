@@ -34,7 +34,7 @@ class Trainer():
         self.tracker.plot_empirical_nngp_matrix(model=model, training_data=training_data)
         limiting_nngp_matrix = self.tracker.compute_limiting_nngp_matrix(training_data=training_data)
         self.tracker.plot_limiting_nngp_matrix(training_data=training_data)
-        kernel_nc1 = self.tracker._compute_kernel_nc1(K=limiting_nngp_matrix)
+        kernel_nc1 = self.tracker.compute_kernel_nc1(K=limiting_nngp_matrix)
         logger.info("Limiting NNGP NC1: {}".format(kernel_nc1))
         if isinstance(training_data, Circle2D):
             self.tracker.plot_limiting_nngp_circlar2d(training_data=training_data)
@@ -43,7 +43,7 @@ class Trainer():
         # normalize to unit peak
         limiting_ntk_matrix = limiting_ntk_matrix/torch.max(limiting_ntk_matrix)
         self.tracker.plot_limiting_ntk_matrix(training_data=training_data)
-        kernel_nc1 = self.tracker._compute_kernel_nc1(K=limiting_ntk_matrix)
+        kernel_nc1 = self.tracker.compute_kernel_nc1(K=limiting_ntk_matrix)
         logger.info("Limiting NTK NC1: {}".format(kernel_nc1))
         if isinstance(training_data, Circle2D):
             self.tracker.plot_limiting_ntk_circular2d(training_data=training_data)

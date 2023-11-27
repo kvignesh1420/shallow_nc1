@@ -29,7 +29,7 @@ def prepare_config_hash(context):
 def setup_runtime_context(context):
     # create a unique hash for the model
     if context["training_data_cls"] not in data_cls_map:
-        sys.exit("Invalid training_data_cls. Choose from {}".format(list(data_cls_map.keys())))
+        sys.exit("Invalid training_data_cls. Choose from {}".format(list(data_cls_map.keys())))        
     config_uuid = prepare_config_hash(context=context)
     context["config_uuid"] = config_uuid
     context["device"] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -38,10 +38,10 @@ def setup_runtime_context(context):
     results_dir = context["out_dir"] + context["config_uuid"] + "/results/"
     results_file = results_dir + "run.txt"
     if not os.path.exists(vis_dir):
-        print("Vis folder does not exist. Creating one!")
+        print("Vis folder does not exist. Creating {}".format(vis_dir))
         os.makedirs(vis_dir)
     if not os.path.exists(results_dir):
-        print("Resuls folder does not exist. Creating one!")
+        print("Resuls folder does not exist. Creating {}".format(results_dir))
         os.makedirs(results_dir)
     context["vis_dir"] = vis_dir
     context["results_file"] = results_file
