@@ -38,6 +38,7 @@ class Gaussian1D():
         plt.plot(points[N//2:], np.zeros(N//2), color="blue")
         plt.xlabel("x-axis")
         plt.ylabel("y-axis")
+        plt.grid()
         plt.savefig("{}gaussian1d_data.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
@@ -80,5 +81,6 @@ class Circle2D():
         plt.plot(points[N//2:,0], points[N//2:,1], color="blue")
         plt.xlabel("x-axis")
         plt.ylabel("y-axis")
+        plt.grid()
         plt.savefig("{}circle2d_data.jpg".format(self.context["vis_dir"]))
         plt.clf()

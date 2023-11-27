@@ -84,7 +84,7 @@ class Trainer():
             logger.debug("ntk_feat shape: {}".format(ntk_feat.shape))
             ntk_feat = ntk_feat.unsqueeze(0)
             ntk_feat_matrix = torch.cat([ntk_feat_matrix, ntk_feat], 0)
-        logger.info("ntk_feat_matrx shape: {}".format(ntk_feat_matrix.shape))
+        logger.info("ntk_feat_matrix shape: {}".format(ntk_feat_matrix.shape))
         return ntk_feat_matrix
 
     def train(self, model, training_data, probe_features=False, probe_ntk_features=False):
@@ -101,7 +101,7 @@ class Trainer():
             weight_decay=5e-4
         )
         num_batches = N//BATCH_SIZE
-        logger.info("Number of batches: {}".format(num_batches))
+        logger.debug("Number of batches: {}".format(num_batches))
         for epoch in tqdm(range(NUM_EPOCHS)):
             for batch in range(num_batches):
                 model.zero_grad()
@@ -114,7 +114,7 @@ class Trainer():
                 optimizer.step()
             if epoch%100 == 0:
                 loss_value = loss.cpu().detach().numpy()
-                logger.info("epoch: {} loss: {}".format(epoch, loss_value))
+                logger.debug("epoch: {} loss: {}".format(epoch, loss_value))
                 self.tracker.store_loss(loss=loss_value, epoch=epoch)
                 # ensure an entire pass over the data before the NC metrics are computed
                 with torch.no_grad():
@@ -126,7 +126,7 @@ class Trainer():
                 if probe_features:
                     # enable if necessary
                     # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
-                    logger.info("pred shape: {}".format(pred.shape))
+                    logger.debug("pred shape: {}".format(pred.shape))
                     self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
                     self.tracker.compute_pred_collapse_metrics(pred=pred, training_data=training_data, epoch=epoch)
                 if probe_ntk_features:
@@ -150,7 +150,7 @@ class Trainer():
 
         pred=model(X)
         accuracy = self.compute_accuracy(pred=pred, labels=training_data.labels)
-        logger.info("accuracy: {}".format(accuracy.cpu().detach().numpy()))
+        logger.info("final accuracy: {}".format(accuracy.cpu().detach().numpy()))
         self.plot_pred(pred[training_data.perm_inv].detach().cpu().numpy())
         self.tracker.plot_loss()
         self.tracker.plot_accuracy()

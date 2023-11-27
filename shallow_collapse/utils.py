@@ -44,7 +44,7 @@ class MetricTracker():
         for layer_idx, feat in features.items():
             if layer_idx_filter is not None and layer_idx not in layer_idx_filter:
                 continue
-            logger.info("layer id: {} shape of feat: {}".format(layer_idx, feat.shape))
+            logger.debug("layer id: {} shape of feat: {}".format(layer_idx, feat.shape))
             class_means = scatter(feat, labels, dim=0, reduce="mean")
             expanded_class_means = torch.index_select(class_means, dim=0, index=labels)
             z = feat - expanded_class_means
@@ -83,14 +83,14 @@ class MetricTracker():
             labels=training_data.labels
         )
         ntk_collapse_metrics_df = pd.DataFrame.from_dict(self.ntk_collapse_metrics)
-        logger.info("\nmetrics of empirical NTK at epoch {}:\n{}".format(epoch, ntk_collapse_metrics_df))
+        logger.debug("\nmetrics of empirical NTK at epoch {}:\n{}".format(epoch, ntk_collapse_metrics_df))
         self.epoch_ntk_collapse_metrics[epoch] = self.ntk_collapse_metrics[layer_idx]
 
     def plot_ntk_collapse_metrics(self):
         x = list(self.epoch_ntk_collapse_metrics.keys())
         values = list(self.epoch_ntk_collapse_metrics.values())
         df = pd.DataFrame(values, index=x).astype(float)
-        logging.info(df)
+        logger.info("NC1 metrics for empirical ntk across epochs:\n{}".format(df))
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
         plt.savefig("{}ntk_nc_metrics.jpg".format(self.context["vis_dir"]))
@@ -110,7 +110,7 @@ class MetricTracker():
             labels=training_data.labels
         )
         pre_activation_collapse_metrics_df = pd.DataFrame.from_dict(self.pre_activation_collapse_metrics)
-        logger.info("\nmetrics of layer-wise pre-activations at epoch {}:\n{}".format(epoch, pre_activation_collapse_metrics_df))
+        logger.debug("\nmetrics of layer-wise pre-activations at epoch {}:\n{}".format(epoch, pre_activation_collapse_metrics_df))
 
     def compute_post_activation_collapse_metrics(self, model, training_data, epoch):
         self.post_activation_collapse_metrics = self.compute_layerwise_nc1(
@@ -118,14 +118,14 @@ class MetricTracker():
             labels=training_data.labels
         )
         post_activation_collapse_metrics_df = pd.DataFrame.from_dict(self.post_activation_collapse_metrics)
-        logger.info("\nmetrics of layer-wise post-activations at epoch {}:\n{}".format(epoch, post_activation_collapse_metrics_df))
+        logger.debug("\nmetrics of layer-wise post-activations at epoch {}:\n{}".format(epoch, post_activation_collapse_metrics_df))
         self.epoch_post_activation_collapse_metrics[epoch] = self.post_activation_collapse_metrics[self.context["L"]-2]
 
     def plot_post_activation_collapse_metrics(self):
         x = list(self.epoch_post_activation_collapse_metrics.keys())
         values = list(self.epoch_post_activation_collapse_metrics.values())
         df = pd.DataFrame(values, index=x).astype(float)
-        logging.info(df)
+        logger.info("NC1 metrics for post-activations across epochs:\n{}".format(df))
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
         plt.savefig("{}post_activation_nc_metrics.jpg".format(self.context["vis_dir"]))
@@ -138,14 +138,14 @@ class MetricTracker():
             labels=training_data.labels
         )
         pred_collapse_metrics_df = pd.DataFrame.from_dict(self.pred_collapse_metrics)
-        logger.info("\nmetrics of model predictions at epoch {}:\n{}".format(epoch, pred_collapse_metrics_df))
+        logger.debug("\nmetrics of model predictions at epoch {}:\n{}".format(epoch, pred_collapse_metrics_df))
         self.epoch_pred_collapse_metrics[epoch] = self.pred_collapse_metrics[layer_idx]
 
     def plot_pred_collapse_metrics(self):
         x = list(self.epoch_pred_collapse_metrics.keys())
         values = list(self.epoch_pred_collapse_metrics.values())
         df = pd.DataFrame(values, index=x).astype(float)
-        logging.info(df)
+        logger.info("NC1 metrics for pred across epochs:\n{}".format(df))
         df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
         df.plot(grid=True, xlabel="epoch", ylabel="NC1")
         plt.savefig("{}pred_nc_metrics.jpg".format(self.context["vis_dir"]))
@@ -158,7 +158,7 @@ class MetricTracker():
         x = list(self.epoch_loss.keys())
         values = list(self.epoch_loss.values())
         df = pd.DataFrame(values, index=x).astype(float)
-        logging.info(df)
+        logger.info("loss across epochs:\n{}".format(df))
         df.plot(grid=True, xlabel="epoch", ylabel="loss")
         plt.savefig("{}loss.jpg".format(self.context["vis_dir"]))
         plt.clf()
@@ -170,7 +170,7 @@ class MetricTracker():
         x = list(self.epoch_accuracy.keys())
         values = list(self.epoch_accuracy.values())
         df = pd.DataFrame(values, index=x).astype(float)
-        logging.info(df)
+        logger.info("accuracy across epochs:\n{}".format(df))
         df.plot(grid=True, xlabel="epoch", ylabel="accuracy")
         plt.savefig("{}accuracy.jpg".format(self.context["vis_dir"]))
         plt.clf()
@@ -192,7 +192,7 @@ class MetricTracker():
         data_nc1_hat = self.data_collapse_metrics[-1]["trace_S_W_div_S_B"]
         post_activations_nc1_hat = self.post_activation_collapse_metrics[self.context["L"]-2]["trace_S_W_div_S_B"]
         nngp_nc1_hat_ratio = post_activations_nc1_hat/data_nc1_hat
-        logger.info("\npost_activations_nc1_hat/data_nc1_hat: {}\n".format(nngp_nc1_hat_ratio))
+        logger.info("post_activations_nc1_hat/data_nc1_hat: {}\n".format(nngp_nc1_hat_ratio))
 
     def compute_kernel_nc1(self, K):
         """

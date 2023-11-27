@@ -58,7 +58,7 @@ def main():
         "training_data_cls": "Gaussian1D",
         "N": 200,
         "BATCH_SIZE": 200,
-        "NUM_EPOCHS": 1,
+        "NUM_EPOCHS": 1000,
         "L": 2,
         "in_features": 1,
         "hidden_features": 1024,
