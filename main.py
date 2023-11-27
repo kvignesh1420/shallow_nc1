@@ -40,9 +40,13 @@ def setup_runtime_context(context):
     if not os.path.exists(vis_dir):
         print("Vis folder does not exist. Creating {}".format(vis_dir))
         os.makedirs(vis_dir)
+    else:
+        print("Vis folder {} already exists!".format(vis_dir))
     if not os.path.exists(results_dir):
         print("Resuls folder does not exist. Creating {}".format(results_dir))
         os.makedirs(results_dir)
+    else:
+        print("Resuls folder {} already exists!".format(results_dir))
     context["vis_dir"] = vis_dir
     context["results_file"] = results_file
 
