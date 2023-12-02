@@ -18,12 +18,6 @@ class Trainer():
         self.context = context
         self.tracker = tracker
 
-    def compute_accuracy(self, pred, labels):
-        pred = (pred >= 0.5).squeeze().type(torch.int64)
-        logging.debug("pred: {}, labels: {}".format(pred, labels))
-        acc = torch.mean((pred == labels).type(torch.float))
-        return acc
-
     def plot_pred(self, pred):
         plt.plot(pred)
         plt.savefig("{}pred.jpg".format(self.context["vis_dir"]))
@@ -87,7 +81,37 @@ class Trainer():
         logger.info("ntk_feat_matrix shape: {}".format(ntk_feat_matrix.shape))
         return ntk_feat_matrix
 
-    def train(self, model, training_data, probe_features=False, probe_ntk_features=False):
+    def probe(self, model, training_data, epoch):
+        model.zero_grad()
+        X = training_data.X
+        pred=model(X)
+        if self.context["probe_features"]:
+            # enable if necessary
+            # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
+            logger.debug("pred shape: {}".format(pred.shape))
+            self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
+            self.tracker.compute_pred_collapse_metrics(pred=pred, training_data=training_data, epoch=epoch)
+        if self.context["probe_ntk_features"]:
+            self.ntk_feat_matrix = self.prepare_ntk_feat_matrix(model=model, training_data=training_data)
+            self.tracker.compute_ntk_collapse_metrics(
+                ntk_feat_matrix=self.ntk_feat_matrix,
+                training_data=training_data,
+                epoch=epoch
+            )
+            self.tracker.plot_empirical_ntk_matrix(
+                ntk_feat_matrix=self.ntk_feat_matrix,
+                training_data=training_data,
+                epoch=epoch
+            )
+            if isinstance(training_data, Circle2D):
+                self.tracker.plot_empirical_ntk_matrix(
+                    ntk_feat_matrix=self.ntk_feat_matrix,
+                    training_data=training_data,
+                    epoch=epoch
+                )
+
+
+    def train(self, model, training_data):
         N = self.context["N"]
         BATCH_SIZE = self.context["BATCH_SIZE"]
         NUM_EPOCHS = self.context["NUM_EPOCHS"]
@@ -112,50 +136,17 @@ class Trainer():
                 loss = loss_criterion(pred, y)
                 loss.backward()
                 optimizer.step()
-            if epoch%100 == 0:
+            if epoch%self.context["probing_frequency"] == 0:
                 loss_value = loss.cpu().detach().numpy()
                 logger.debug("epoch: {} loss: {}".format(epoch, loss_value))
                 self.tracker.store_loss(loss=loss_value, epoch=epoch)
-                # ensure an entire pass over the data before the NC metrics are computed
-                with torch.no_grad():
-                    model.zero_grad()
-                    pred=model(X)
-                    accuracy = self.compute_accuracy(pred=pred, labels=training_data.labels)
-                    accuracy_value = accuracy.cpu().detach().numpy()
-                self.tracker.store_accuracy(accuracy=accuracy_value, epoch=epoch)
-                if probe_features:
-                    # enable if necessary
-                    # self.tracker.compute_pre_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
-                    logger.debug("pred shape: {}".format(pred.shape))
-                    self.tracker.compute_post_activation_collapse_metrics(model=model, training_data=training_data, epoch=epoch)
-                    self.tracker.compute_pred_collapse_metrics(pred=pred, training_data=training_data, epoch=epoch)
-                if probe_ntk_features:
-                    self.ntk_feat_matrix = self.prepare_ntk_feat_matrix(model=model, training_data=training_data)
-                    self.tracker.compute_ntk_collapse_metrics(
-                        ntk_feat_matrix=self.ntk_feat_matrix,
-                        training_data=training_data,
-                        epoch=epoch
-                    )
-                    self.tracker.plot_empirical_ntk_matrix(
-                        ntk_feat_matrix=self.ntk_feat_matrix,
-                        training_data=training_data,
-                        epoch=epoch
-                    )
-                    if isinstance(training_data, Circle2D):
-                        self.tracker.plot_empirical_ntk_matrix(
-                            ntk_feat_matrix=self.ntk_feat_matrix,
-                            training_data=training_data,
-                            epoch=epoch
-                        )
+                self.probe(model=model, training_data=training_data, epoch=epoch)
 
         pred=model(X)
-        accuracy = self.compute_accuracy(pred=pred, labels=training_data.labels)
-        logger.info("final accuracy: {}".format(accuracy.cpu().detach().numpy()))
         self.plot_pred(pred[training_data.perm_inv].detach().cpu().numpy())
         self.tracker.plot_loss()
-        self.tracker.plot_accuracy()
-        if probe_features:
+        if self.context["probe_features"]:
             self.tracker.plot_post_activation_collapse_metrics()
             self.tracker.plot_pred_collapse_metrics()
-        if probe_ntk_features:
+        if self.context["probe_ntk_features"]:
             self.tracker.plot_ntk_collapse_metrics()

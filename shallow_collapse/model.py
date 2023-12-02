@@ -14,6 +14,7 @@ class MLPModel(torch.nn.Module):
         self.hidden_features = context["hidden_features"]
         self.out_features = context["out_features"]
         self.bias_std = context["bias_std"]
+        self.use_batch_norm = context["use_batch_norm"]
         self._initialize_features()
         self._initialize_layers()
         self._assign_hooks()
@@ -33,7 +34,8 @@ class MLPModel(torch.nn.Module):
         torch.nn.init.normal_(self.first_layer.bias, std=self.bias_std)
         self.hidden_layers = [self.first_layer]
         self.activation_layers = [torch.nn.ReLU()]
-        # self.normalization_layers = [torch.nn.BatchNorm1d(self.hidden_features)]
+        if self.use_batch_norm:
+            self.normalization_layers = [torch.nn.BatchNorm1d(self.hidden_features)]
 
         for l in range(1, self.L-1):
             layer = torch.nn.Linear(
@@ -45,7 +47,8 @@ class MLPModel(torch.nn.Module):
             torch.nn.init.normal_(layer.bias, std=self.bias_std)
             self.hidden_layers.append(layer)
             self.activation_layers.append(torch.nn.Identity())
-            # self.normalization_layers.append(torch.nn.BatchNorm1d(self.hidden_features))
+            if self.use_batch_norm:
+                self.normalization_layers.append(torch.nn.BatchNorm1d(self.hidden_features))
 
         self.final_layer = torch.nn.Linear(
             in_features=self.hidden_features,
@@ -59,7 +62,8 @@ class MLPModel(torch.nn.Module):
 
         self.hidden_layers = torch.nn.ModuleList(self.hidden_layers)
         self.activation_layers = torch.nn.ModuleList(self.activation_layers)
-        # self.normalization_layers = torch.nn.ModuleList(self.normalization_layers)
+        if self.use_batch_norm:
+            self.normalization_layers = torch.nn.ModuleList(self.normalization_layers)
 
     @torch.no_grad()
     def _probe_pre_activations(self, idx):
@@ -90,7 +94,8 @@ class MLPModel(torch.nn.Module):
         for l in range(self.L-1):
             x = self.hidden_layers[l](x)
             x = self.activation_layers[l](x)
-            # x = self.normalization_layers[l](x)
+            if self.use_batch_norm:
+                x = self.normalization_layers[l](x)
 
         x = self.hidden_layers[self.L-1](x)
         x = self.activation_layers[self.L-1](x)
