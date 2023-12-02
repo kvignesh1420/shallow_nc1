@@ -60,14 +60,14 @@ class Trainer():
     def prepare_ntk_feat_matrix(self, model, training_data):
         X = training_data.X
         model_copy = copy.deepcopy(model)
-        ntk_feat_matrix = torch.empty(0)
+        ntk_feat_matrix = torch.empty(0).to(self.context["device"])
         for x_idx in range(self.context["N"]):
             model_copy.zero_grad()
             x = X[x_idx, : ]
             pred = model_copy(x)
             logger.debug(pred.shape)
             pred.backward(retain_graph=True)
-            ntk_feat = torch.empty(0)
+            ntk_feat = torch.empty(0).to(self.context["device"])
             for layer_idx in range(len(model_copy.hidden_layers)):
                 layer_weight_grad = model_copy.hidden_layers[layer_idx].weight.grad.flatten()
                 layer_bias_grad = model_copy.hidden_layers[layer_idx].bias.grad.flatten()
@@ -121,7 +121,7 @@ class Trainer():
         optimizer = torch.optim.SGD(
             params=model.parameters(),
             lr=self.context["lr"],
-            momentum=0,
+            momentum=self.context["momentum"],
             weight_decay=self.context["weight_decay"]
         )
         num_batches = N//BATCH_SIZE

@@ -93,9 +93,9 @@ class MLPModel(torch.nn.Module):
     def forward(self, x : torch.Tensor) -> torch.Tensor:
         for l in range(self.L-1):
             x = self.hidden_layers[l](x)
-            x = self.activation_layers[l](x)
             if self.use_batch_norm:
                 x = self.normalization_layers[l](x)
+            x = self.activation_layers[l](x)
 
         x = self.hidden_layers[self.L-1](x)
         x = self.activation_layers[self.L-1](x)

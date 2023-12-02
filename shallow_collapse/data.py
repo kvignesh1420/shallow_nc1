@@ -99,9 +99,12 @@ class MNIST():
     
     def prepare_data(self):
         """
+        Create a 2-class balanced dataset from MNIST training data.
+        For simplicity, we choose 0 and 1.
         straightforward adaptation from https://github.com/pytorch/examples/blob/main/mnist/main.py
         """
         device = self.context["device"]
+        N = self.context["N"]
         transform=transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
@@ -109,7 +112,16 @@ class MNIST():
         train_dataset = datasets.MNIST('../data', train=True, download=True,
                        transform=transform)
         flattener = torch.nn.Flatten()
-        self.X = flattener(train_dataset.data).to(device)
-        self.labels = train_dataset.targets.type(torch.int64).to(device)
-        self.Y = self.labels.type(torch.float).unsqueeze(1).to(device)
-        _, self.perm_inv = torch.sort(self.labels).to(device)
+        X = flattener(train_dataset.data).type(torch.float).to(device)
+        labels = train_dataset.targets.type(torch.int64).to(device)
+        zero_labels = (labels == 0).nonzero().flatten()[:N//2]
+        one_labels = (labels == 1).nonzero().flatten()[:N//2]
+        X1 = X[zero_labels]
+        X2 = X[one_labels]
+        X = torch.cat([X1, X2])
+        Y = torch.cat([torch.zeros(N//2, 1), torch.ones(N//2, 1)])
+        self.perm = torch.randperm(n=N)
+        self.perm_inv = torch.argsort(self.perm).to(device)
+        self.X = X[self.perm].to(device)
+        self.Y = Y[self.perm].to(device)
+        self.labels = torch.squeeze_copy(self.Y).type(torch.int64).to(device)

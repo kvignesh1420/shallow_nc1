@@ -23,9 +23,9 @@ class MetricTracker():
         self.epoch_loss = OrderedDict()
         self.epoch_accuracy = OrderedDict()
 
-    @staticmethod
     @torch.no_grad()
     def compute_layerwise_nc1(
+        self,
         features: Dict[int, torch.Tensor],
         labels: torch.Tensor,
         layer_idx_filter: Optional[List[int]] = None):
@@ -65,15 +65,15 @@ class MetricTracker():
             try:
                 nc1 = torch.trace(S_W @ torch.linalg.pinv(S_B)) / num_classes
             except Exception as e:
-                nc1 = torch.Tensor(-1)
+                nc1 = torch.ones(1).to(self.context["device"])[0]
                 logger.error("Exception raised while computing NC1: {}".format(str(e)))
 
             nc1_hat = torch.trace(S_W)/torch.trace(S_B)
             collapse_metrics[layer_idx] = {}
-            collapse_metrics[layer_idx]["trace_S_W_pinv_S_B"] = nc1.detach().cpu().numpy()
-            collapse_metrics[layer_idx]["trace_S_W_div_S_B"] = nc1_hat.detach().cpu().numpy()
-            collapse_metrics[layer_idx]["trace_S_W"] = torch.trace(S_W).detach().cpu().numpy()
-            collapse_metrics[layer_idx]["trace_S_B"] = torch.trace(S_B).detach().cpu().numpy()
+            collapse_metrics[layer_idx]["trace_S_W_pinv_S_B"] = torch.log10(nc1).detach().cpu().numpy()
+            collapse_metrics[layer_idx]["trace_S_W_div_S_B"] = torch.log10(nc1_hat).detach().cpu().numpy()
+            collapse_metrics[layer_idx]["trace_S_W"] = torch.log10(torch.trace(S_W)).detach().cpu().numpy()
+            collapse_metrics[layer_idx]["trace_S_B"] = torch.log10(torch.trace(S_B)).detach().cpu().numpy()
         return collapse_metrics
 
     def compute_ntk_collapse_metrics(self, training_data, ntk_feat_matrix, epoch):
@@ -119,17 +119,21 @@ class MetricTracker():
         )
         post_activation_collapse_metrics_df = pd.DataFrame.from_dict(self.post_activation_collapse_metrics)
         logger.debug("\nmetrics of layer-wise post-activations at epoch {}:\n{}".format(epoch, post_activation_collapse_metrics_df))
-        self.epoch_post_activation_collapse_metrics[epoch] = self.post_activation_collapse_metrics[self.context["L"]-2]
+        for l in range(self.context["L"]-1):
+            if l not in self.epoch_post_activation_collapse_metrics:
+                self.epoch_post_activation_collapse_metrics[l] = OrderedDict()
+            self.epoch_post_activation_collapse_metrics[l][epoch] = self.post_activation_collapse_metrics[l]
 
     def plot_post_activation_collapse_metrics(self):
-        x = list(self.epoch_post_activation_collapse_metrics.keys())
-        values = list(self.epoch_post_activation_collapse_metrics.values())
-        df = pd.DataFrame(values, index=x).astype(float)
-        logger.info("NC1 metrics for post-activations across epochs:\n{}".format(df))
-        df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
-        df.plot(grid=True, xlabel="epoch", ylabel="NC1")
-        plt.savefig("{}post_activation_nc_metrics.jpg".format(self.context["vis_dir"]))
-        plt.clf()
+        for l in range(self.context["L"]-1):
+            x = list(self.epoch_post_activation_collapse_metrics[l].keys())
+            values = list(self.epoch_post_activation_collapse_metrics[l].values())
+            df = pd.DataFrame(values, index=x).astype(float)
+            logger.info("NC1 metrics for post-activations {} across epochs:\n{}".format(l, df))
+            df = df[["trace_S_W_div_S_B", "trace_S_W_pinv_S_B"]]
+            df.plot(grid=True, xlabel="epoch", ylabel="NC1")
+            plt.savefig("{}post_activation_layer_{}_nc_metrics.jpg".format(self.context["vis_dir"], l))
+            plt.clf()
 
     def compute_pred_collapse_metrics(self, pred, training_data, epoch):
         layer_idx=-1
@@ -181,7 +185,7 @@ class MetricTracker():
         """
         S = torch.linalg.svdvals(K)
         log2_S = torch.log2(S)
-        plt.plot(log2_S)
+        plt.plot(log2_S.cpu())
         plt.xlabel("k")
         plt.ylabel("$\log_2(\lambda_k)$")
         plt.grid()
@@ -229,7 +233,7 @@ class MetricTracker():
                 K_ii = self.nngp_layer1[i, i]
                 K_ij = self.nngp_layer1[i, j]
                 K_jj = self.nngp_layer1[j, j]
-                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
+                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-12) )
                 val = (torch.sqrt(K_ii*K_jj)*( torch.sin(theta) + (torch.pi - theta)*torch.cos(theta) )) /(2*torch.pi)
                 self.nngp_layer1_relu[i,j] = val
         return self.nngp_layer1_relu
@@ -237,9 +241,13 @@ class MetricTracker():
     def plot_limiting_nngp_matrix(self, training_data):
         N=self.context["N"]
         limiting_nngp_matrix = self.compute_limiting_nngp_matrix(training_data=training_data)
-        plt.imshow(limiting_nngp_matrix, cmap='viridis')
+        plt.imshow(limiting_nngp_matrix.cpu(), cmap='viridis')
         plt.colorbar()
         plt.savefig("{}limiting_nngp_matrix.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+        plt.imshow(self.nngp_layer1.cpu(), cmap='viridis')
+        plt.colorbar()
+        plt.savefig("{}limiting_nngp_layer1_matrix.jpg".format(self.context["vis_dir"]))
         plt.clf()
         self.plot_kernel_spectrum(K=limiting_nngp_matrix, filename="limiting_nngp_spectrum.jpg")
 
@@ -264,7 +272,7 @@ class MetricTracker():
         features = features[training_data.perm_inv]
         normalized_features = F.normalize(features, p=2, dim=1)
         nngp_matrix = normalized_features @ normalized_features.t()
-        plt.imshow(nngp_matrix, cmap='viridis')
+        plt.imshow(nngp_matrix.cpu(), cmap='viridis')
         plt.colorbar()
         plt.savefig("{}empirical_nngp_matrix.jpg".format(self.context["vis_dir"]))
         plt.clf()
@@ -302,7 +310,7 @@ class MetricTracker():
                 K_ii = self.nngp_layer1[i, i]
                 K_ij = self.nngp_layer1[i, j]
                 K_jj = self.nngp_layer1[j, j]
-                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
+                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-12) )
                 val = (torch.pi - theta) /(2*torch.pi)
                 nngp_layer1_relu_derivative[i,j] = val
         self.ntk_layer2 = nngp_layer2 + ntk_layer1 * nngp_layer1_relu_derivative
@@ -315,7 +323,7 @@ class MetricTracker():
         limiting_ntk_matrix = self.compute_limiting_ntk_matrix(training_data=training_data)
         # normalize to unit peak
         limiting_ntk_matrix = limiting_ntk_matrix/torch.max(limiting_ntk_matrix)
-        plt.imshow(limiting_ntk_matrix, cmap='viridis')
+        plt.imshow(limiting_ntk_matrix.cpu(), cmap='viridis')
         plt.colorbar()
         plt.savefig("{}limiting_ntk_matrix.jpg".format(self.context["vis_dir"]))
         plt.clf()
@@ -346,7 +354,7 @@ class MetricTracker():
         features = features[training_data.perm_inv]
         normalized_features = F.normalize(features, p=2, dim=1)
         empirical_ntk_matrix = normalized_features @ normalized_features.t()
-        plt.imshow(empirical_ntk_matrix, cmap='viridis')
+        plt.imshow(empirical_ntk_matrix.cpu(), cmap='viridis')
         plt.colorbar()
         plt.savefig("{}empirical_ntk_matrix_epoch{}.jpg".format(self.context["vis_dir"], epoch))
         plt.clf()

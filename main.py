@@ -4,7 +4,7 @@ import hashlib
 import sys
 import logging
 import torch
-torch.manual_seed(3)
+# torch.manual_seed(3)
 # - setting random seed to 1 leads to zero accuracy for 1 iter (the data is linearly separable
 #   from the get go!). However, after 2,3 iters accuracy increases to 0.5
 #   and after 4 iters, it becomes 1. This implies that the weight vectors might be rotating?
@@ -58,27 +58,28 @@ def setup_runtime_context(context):
 def main():
     exp_context = {
         "training_data_cls": "MNIST",
-        "N": 60000,
-        "BATCH_SIZE": 60000,
-        "NUM_EPOCHS": 1,
-        "L": 2,
+        "N": 200,
+        "BATCH_SIZE": 200,
+        "NUM_EPOCHS": 1000,
+        "L": 10,
         "in_features": 784,
         "hidden_features": 1024,
         "out_features": 1,
         "use_batch_norm": True,
-        "lr": 5e-3,
-        "weight_decay": 5e-4,
+        "lr": 1e-4,
+        "momentum": 0.0,
+        "weight_decay": 5e-3,
         "bias_std": 1,
         "probe_features": True,
         "probe_ntk_features": False,
-        "probing_frequency": 1
+        "probing_frequency": 100
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
         filename=context["results_file"],
         filemode='a',
         format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-        level=logging.DEBUG
+        level=logging.INFO
     )
     logging.info("context: \n{}".format(context))
     training_data = data_cls_map[context["training_data_cls"]](context=context)
