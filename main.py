@@ -13,6 +13,7 @@ import torch
 from shallow_collapse.model import MLPModel
 from shallow_collapse.data import Gaussian1D
 from shallow_collapse.data import Circle2D
+from shallow_collapse.data import MNIST2Class
 from shallow_collapse.data import MNIST
 from shallow_collapse.tracker import MetricTracker
 from shallow_collapse.trainer import Trainer
@@ -20,6 +21,7 @@ from shallow_collapse.trainer import Trainer
 data_cls_map = {
     "Gaussian1D": Gaussian1D,
     "Circle2D": Circle2D,
+    "MNIST2Class": MNIST2Class,
     "MNIST": MNIST
 }
 
@@ -57,22 +59,22 @@ def setup_runtime_context(context):
 
 def main():
     exp_context = {
-        "training_data_cls": "Gaussian1D",
-        "N": 200,
-        "batch_size": 200,
-        "num_epochs": 1,
+        "training_data_cls": "MNIST",
+        "N": 60000,
+        "batch_size": 256,
+        "num_epochs": 10,
         "L": 2,
-        "in_features": 1,
+        "in_features": 784,
         "hidden_features": 1024,
         "out_features": 1,
-        "num_classes" : 2,
-        "use_batch_norm": False,
-        "lr": 1e-4,
+        "num_classes" : 10,
+        "use_batch_norm": True,
+        "lr": 1e-3,
         "momentum": 0.0,
         "weight_decay": 5e-4,
         "bias_std": 1,
         "probe_features": True,
-        "probe_kernels": True,
+        "probe_kernels": False,
         "probing_frequency": 1
     }
     context = setup_runtime_context(context=exp_context)

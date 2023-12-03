@@ -73,7 +73,7 @@ class Trainer():
         for epoch in tqdm(range(1, num_epochs+1)):
             for data, labels in training_data.train_loader:
                 model.zero_grad()
-                data, labels = data.to(device), labels.to(device)
+                data, labels = data.to(device), labels.type(torch.float).to(device)
                 pred = model(data)
                 loss = loss_criterion(pred, labels.unsqueeze(1))
                 loss.backward()

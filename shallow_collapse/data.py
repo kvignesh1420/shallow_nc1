@@ -114,7 +114,7 @@ class Circle2D():
         plt.clf()
 
 
-class MNIST():
+class MNIST2Class():
     """
     MNIST training and testing data
     """
@@ -154,4 +154,26 @@ class MNIST():
     def prepare_data_loader(self):
         train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
         train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
+        self.train_loader = DataLoader(train_dataset, **train_kwargs)
+
+class MNIST():
+    """
+    MNIST training and testing data
+    """
+    def __init__(self, context) -> None:
+        self.context = context
+        self.prepare_data()
+
+    def prepare_data(self):
+        """
+        straightforward adaptation from https://github.com/pytorch/examples/blob/main/mnist/main.py
+        """
+        N = self.context["N"]
+        transform=transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+            ])
+        train_kwargs = {"batch_size": self.context["batch_size"]}
+        train_dataset = datasets.MNIST('../data', train=True, download=True,
+                       transform=transform)
         self.train_loader = DataLoader(train_dataset, **train_kwargs)

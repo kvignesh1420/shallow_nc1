@@ -25,6 +25,7 @@ class MLPModel(torch.nn.Module):
         self.post_normalizations = {}
 
     def _initialize_layers(self):
+        self.flattener = torch.nn.Flatten()
         self.first_layer = torch.nn.Linear(
             in_features=self.in_features,
             out_features=self.hidden_features,
@@ -91,6 +92,7 @@ class MLPModel(torch.nn.Module):
             )
 
     def forward(self, x : torch.Tensor) -> torch.Tensor:
+        x = self.flattener(x)
         for l in range(self.L-1):
             x = self.hidden_layers[l](x)
             if self.use_batch_norm:
