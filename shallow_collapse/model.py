@@ -20,8 +20,8 @@ class MLPModel(torch.nn.Module):
         self._assign_hooks()
 
     def _initialize_features(self):
-        self.pre_activations = {}
-        self.post_activations = {}
+        self.affine_features = {}
+        self.activation_features = {}
         self.post_normalizations = {}
 
     def _initialize_layers(self):
@@ -66,28 +66,28 @@ class MLPModel(torch.nn.Module):
             self.normalization_layers = torch.nn.ModuleList(self.normalization_layers)
 
     @torch.no_grad()
-    def _probe_pre_activations(self, idx):
+    def _probe_affine_features(self, idx):
         def hook(model, inp, out):
-            self.pre_activations[idx] = out.detach()
+            self.affine_features[idx] = out.detach()
         return hook
 
     @torch.no_grad()
-    def _probe_post_activations(self, idx):
+    def _probe_activation_features(self, idx):
         def hook(model, inp, out):
-            self.post_activations[idx] = out.detach()
+            self.activation_features[idx] = out.detach()
         return hook
 
     @torch.no_grad()
     def _assign_hooks(self):
-        self.pre_activations = {}
-        self.post_activations = {}
+        self.affine_features = {}
+        self.activation_features = {}
         for layer_idx in range(len(self.hidden_layers)):
             self.hidden_layers[layer_idx].register_forward_hook(
-                self._probe_pre_activations(idx=layer_idx)
+                self._probe_affine_features(idx=layer_idx)
             )
         for layer_idx in range(len(self.activation_layers)):
             self.activation_layers[layer_idx].register_forward_hook(
-                self._probe_post_activations(idx=layer_idx)
+                self._probe_activation_features(idx=layer_idx)
             )
 
     def forward(self, x : torch.Tensor) -> torch.Tensor:

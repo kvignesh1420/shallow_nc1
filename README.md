@@ -15,17 +15,23 @@ $ pip install -r requirements.txt
 - As of now, modify the `exp_context` dictionary in `main.py` to configure the experiment. A sample value is shown below:
 ```py
 exp_context = {
-    "training_data_cls": "Circle2D",
+    "training_data_cls": "Gaussian1D",
     "N": 200,
-    "BATCH_SIZE": 200,
-    "NUM_EPOCHS": 1,
+    "batch_size": 200,
+    "num_epochs": 1,
     "L": 2,
-    "in_features": 2,
+    "in_features": 1,
     "hidden_features": 1024,
     "out_features": 1,
+    "num_classes" : 2,
+    "use_batch_norm": False,
     "lr": 1e-4,
+    "momentum": 0.0,
     "weight_decay": 5e-4,
-    "bias_std": 1
+    "bias_std": 1,
+    "probe_features": True,
+    "probe_kernels": True,
+    "probing_frequency": 1
 }
 ```
 

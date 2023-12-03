@@ -1,9 +1,24 @@
 import logging
 logger = logging.getLogger(__name__)
 import torch
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 import numpy as np
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
+
+class _SyntheticDataset(Dataset):
+    def __init__(self, X, labels) -> None:
+        super().__init__()
+        self.X = X
+        self.labels = labels
+    
+    def __len__(self):
+        return self.X.shape[0]
+    
+    def __getitem__(self, index):
+        return self.X[index], self.labels[index]
+
 
 class Gaussian1D():
     """
@@ -26,12 +41,17 @@ class Gaussian1D():
         X1 = torch.normal(mean=torch.tensor(-2), std=torch.tensor(0.3), size=(N//2, 1), requires_grad=False)
         X2 = torch.normal(mean=torch.tensor(2), std=torch.tensor(0.3), size=(N//2, 1), requires_grad=False)
         X = torch.concat((X1, X2))
-        Y = torch.concat((torch.zeros(N//2, 1), torch.ones(N//2, 1)))
+        labels = torch.cat([torch.zeros(N//2), torch.ones(N//2)])
         self.perm = torch.randperm(n=N)
         self.perm_inv = torch.argsort(self.perm).to(device)
         self.X = X[self.perm].to(device)
-        self.Y = Y[self.perm].to(device)
-        self.labels = torch.squeeze_copy(self.Y).type(torch.int64).to(device)
+        self.labels = labels[self.perm].to(device)
+        self.prepare_data_loader()
+
+    def prepare_data_loader(self):
+        train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
+        train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
+        self.train_loader = DataLoader(train_dataset, **train_kwargs)
 
     def plot(self):
         N = self.context["N"]
@@ -69,13 +89,18 @@ class Circle2D():
         X1 = torch.cat([torch.cos(theta1s).unsqueeze(1), torch.sin(theta1s).unsqueeze(1)], 1)
         X2 = torch.cat([torch.cos(theta2s).unsqueeze(1), torch.sin(theta2s).unsqueeze(1)], 1)
         X = torch.cat([X1, X2])
-        Y = torch.cat([torch.zeros(N//2, 1), torch.ones(N//2, 1)])
+        labels = torch.cat([torch.zeros(N//2), torch.ones(N//2)])
         self.perm = torch.randperm(n=N)
         self.perm_inv = torch.argsort(self.perm).to(device)
-        self.thetas = thetas[self.perm]
         self.X = X[self.perm].to(device)
-        self.Y = Y[self.perm].to(device)
-        self.labels = torch.squeeze_copy(self.Y).type(torch.int64).to(device)
+        self.labels = labels[self.perm].to(device)
+        self.thetas = thetas[self.perm]
+        self.prepare_data_loader()
+
+    def prepare_data_loader(self):
+        train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
+        train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
+        self.train_loader = DataLoader(train_dataset, **train_kwargs)
 
     def plot(self):
         N = self.context["N"]
@@ -119,9 +144,14 @@ class MNIST():
         X1 = X[zero_labels]
         X2 = X[one_labels]
         X = torch.cat([X1, X2])
-        Y = torch.cat([torch.zeros(N//2, 1), torch.ones(N//2, 1)])
+        labels = torch.cat([torch.zeros(N//2), torch.ones(N//2)])
         self.perm = torch.randperm(n=N)
         self.perm_inv = torch.argsort(self.perm).to(device)
         self.X = X[self.perm].to(device)
-        self.Y = Y[self.perm].to(device)
-        self.labels = torch.squeeze_copy(self.Y).type(torch.int64).to(device)
+        self.labels = labels[self.perm].to(device)
+        self.prepare_data_loader()
+
+    def prepare_data_loader(self):
+        train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
+        train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
+        self.train_loader = DataLoader(train_dataset, **train_kwargs)

@@ -14,7 +14,7 @@ from shallow_collapse.model import MLPModel
 from shallow_collapse.data import Gaussian1D
 from shallow_collapse.data import Circle2D
 from shallow_collapse.data import MNIST
-from shallow_collapse.utils import MetricTracker
+from shallow_collapse.tracker import MetricTracker
 from shallow_collapse.trainer import Trainer
 
 data_cls_map = {
@@ -57,22 +57,23 @@ def setup_runtime_context(context):
 
 def main():
     exp_context = {
-        "training_data_cls": "MNIST",
+        "training_data_cls": "Gaussian1D",
         "N": 200,
-        "BATCH_SIZE": 200,
-        "NUM_EPOCHS": 1000,
-        "L": 10,
-        "in_features": 784,
+        "batch_size": 200,
+        "num_epochs": 1,
+        "L": 2,
+        "in_features": 1,
         "hidden_features": 1024,
         "out_features": 1,
-        "use_batch_norm": True,
+        "num_classes" : 2,
+        "use_batch_norm": False,
         "lr": 1e-4,
         "momentum": 0.0,
-        "weight_decay": 5e-3,
+        "weight_decay": 5e-4,
         "bias_std": 1,
         "probe_features": True,
-        "probe_ntk_features": False,
-        "probing_frequency": 100
+        "probe_kernels": True,
+        "probing_frequency": 1
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
@@ -87,7 +88,6 @@ def main():
     tracker = MetricTracker(context=context)
     trainer = Trainer(context=context, tracker=tracker)
     logging.info("Model: {}".format(model))
-    trainer.forward_pass_at_init(model=model, training_data=training_data)
     trainer.train(model=model, training_data=training_data)
 
 if __name__ == "__main__":
