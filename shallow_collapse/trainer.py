@@ -2,6 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 from typing import Dict, Any
 import torch
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from shallow_collapse.tracker import MetricTracker
@@ -73,9 +74,11 @@ class Trainer():
         for epoch in tqdm(range(1, num_epochs+1)):
             for data, labels in training_data.train_loader:
                 model.zero_grad()
-                data, labels = data.to(device), labels.type(torch.float).to(device)
+                data, labels = data.to(device), labels.to(device)
+                labels = F.one_hot(labels.type(torch.int64), num_classes=self.context["num_classes"])
+                labels = labels.type(torch.float)
                 pred = model(data)
-                loss = loss_criterion(pred, labels.unsqueeze(1))
+                loss = loss_criterion(pred, labels)
                 loss.backward()
                 optimizer.step()
             if epoch%self.context["probing_frequency"] == 0:

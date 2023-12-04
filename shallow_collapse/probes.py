@@ -24,7 +24,22 @@ class NCProbe():
         self.layerwise_class_means = {}
         self.layerwise_class_sums = {}
         self.layerwise_class_cov = {}
-        self.class_sizes = torch.empty((self.num_classes)).to(self.context["device"])
+        self.class_sizes = torch.zeros((self.num_classes)).to(self.context["device"])
+
+    def print_state(self):
+        logger.info("layerwise_global_sum: {}".format(self.layerwise_global_sum))
+        logger.info("layerwise_global_mean: {}".format(self.layerwise_global_mean))
+        logger.info("layerwise_class_means: {}".format(self.layerwise_class_means))
+        logger.info("layerwise_class_sums: {}".format(self.layerwise_class_sums))
+        logger.info("layerwise_class_cov: {}".format(self.layerwise_class_cov))
+        logger.info("class_sizes: {}".format(self.class_sizes))
+
+    def compute_class_sizes(self, training_data):
+        for _, labels in training_data.nc_train_loader:
+            labels = labels.to(self.context["device"])
+            class_count = torch.nn.functional.one_hot(labels, num_classes=self.num_classes).sum(dim = 0)
+            self.class_sizes += class_count
+
 
     def _initialize_placeholders(self, layer_idx, feat_size):
         """
@@ -33,15 +48,14 @@ class NCProbe():
             feat_shape: int
         """
         if layer_idx not in self.layerwise_class_sums:
-            self.layerwise_class_sums[layer_idx] = torch.empty((self.num_classes, feat_size)).to(self.context["device"])
+            self.layerwise_class_sums[layer_idx] = torch.zeros((self.num_classes, feat_size)).to(self.context["device"])
         if layer_idx not in self.layerwise_class_cov:
             self.layerwise_class_cov[layer_idx] = {
-                "S_W": torch.empty((feat_size, feat_size)).to(self.context["device"]),
-                "S_B": torch.empty((feat_size, feat_size)).to(self.context["device"])
+                "S_W": torch.zeros((feat_size, feat_size)).to(self.context["device"]),
+                "S_B": torch.zeros((feat_size, feat_size)).to(self.context["device"])
             }
 
     def _track_sums(self, features, labels):
-        computed_class_count = False
         for layer_idx, feat in features.items():
             self._initialize_placeholders(layer_idx=layer_idx, feat_size=feat.shape[1])
             # accumulate the feature values per class
@@ -53,10 +67,6 @@ class NCProbe():
             # the class_sim, we need this additional filter operation.
             class_sum = class_sum[unique_labels]
             self.layerwise_class_sums[layer_idx][unique_labels] += class_sum
-            if not computed_class_count:
-                class_count = torch.bincount(input=labels, minlength=self.num_classes)
-                self.class_sizes += class_count
-                computed_class_count = True
 
     def _compute_means(self):
         self.layerwise_class_means = {}
@@ -164,6 +174,7 @@ class NCProbe():
         if layer_type not in ["affine", "activation"]:
             raise ValueError("layer_type should be one of ['affine', 'activation']")
         device = self.context["device"]
+        self.compute_class_sizes(training_data=training_data)
         # one-pass to compute class means
         for data, labels in training_data.train_loader:
             model.zero_grad()
@@ -237,7 +248,7 @@ class NTKNCProbe(NCProbe):
         device = self.context["device"]
         model_copy = copy.deepcopy(model)
         # one-pass to compute class means
-        ntk_feat_matrix = torch.empty(0).to(device)
+        ntk_feat_matrix = torch.zeros(0).to(device)
         for data, labels in training_data.train_loader:
             data, labels = data.to(device), labels.to(device)
             assert data.shape[0] == self.context["batch_size"]
@@ -255,7 +266,7 @@ class NTKNCProbe(NCProbe):
         self._compute_means()
 
         # second-pass to compute covariance matrices
-        ntk_feat_matrix = torch.empty(0).to(device)
+        ntk_feat_matrix = torch.zeros(0).to(device)
         for data, labels in training_data.train_loader:
             data, labels = data.to(device), labels.to(device)
             assert data.shape[0] == self.context["batch_size"]
@@ -279,7 +290,7 @@ class KernelProbe():
 
     def _nngp_relu_kernel_helper(self, nngp_kernel):
         N = self.context["N"]
-        nngp_relu_kernel = torch.empty_like(nngp_kernel)
+        nngp_relu_kernel = torch.zeros_like(nngp_kernel)
         for i in range(N):
             for j in range(N):
                 K_ii = nngp_kernel[i, i]
@@ -292,7 +303,7 @@ class KernelProbe():
 
     def _nngp_relu_derivative_kernel_helper(self, nngp_kernel):
         N = self.context["N"]
-        nngp_relu_derivative_kernel = torch.empty_like(nngp_kernel)
+        nngp_relu_derivative_kernel = torch.zeros_like(nngp_kernel)
         for i in range(N):
             for j in range(N):
                 K_ii = nngp_kernel[i, i]
@@ -383,7 +394,7 @@ class KernelProbe():
         assert self.context["batch_size"] == self.context["N"]
         device = self.context["device"]
         model_copy = copy.deepcopy(model)
-        ntk_feat_matrix = torch.empty(0).to(device)
+        ntk_feat_matrix = torch.zeros(0).to(device)
         for data, labels in training_data.train_loader:
             data, labels = data.to(device), labels.to(device)
             assert data.shape[0] == self.context["batch_size"]
