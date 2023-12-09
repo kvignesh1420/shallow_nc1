@@ -46,6 +46,7 @@ class Gaussian1D():
         self.perm_inv = torch.argsort(self.perm).to(device)
         self.X = X[self.perm].to(device)
         self.labels = labels[self.perm].to(device)
+        self.class_sizes = torch.Tensor([N//2, N//2]).type(torch.int)
         self.prepare_data_loader()
 
     def prepare_data_loader(self):
@@ -95,6 +96,7 @@ class Circle2D():
         self.X = X[self.perm].to(device)
         self.labels = labels[self.perm].to(device)
         self.thetas = thetas[self.perm]
+        self.class_sizes = torch.Tensor([N//2, N//2]).type(torch.int)
         self.prepare_data_loader()
 
     def prepare_data_loader(self):
@@ -155,6 +157,14 @@ class MNIST2Class():
         train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
         train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
         self.train_loader = DataLoader(train_dataset, **train_kwargs)
+        self.num_classes = self.context["num_classes"]
+        self.class_sizes = torch.zeros((self.num_classes)).to(self.context["device"])
+        for _, labels in self.train_loader:
+            labels = labels.to(self.context["device"])
+            class_count = torch.nn.functional.one_hot(labels, num_classes=self.num_classes).sum(dim = 0)
+            self.class_sizes += class_count
+        self.class_sizes = self.class_sizes.type(torch.int)
+    
 
 class MNIST():
     """
@@ -171,9 +181,17 @@ class MNIST():
         N = self.context["N"]
         transform=transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-            ])
+            transforms.Normalize((0.1307,), (0.3081,)),
+            transforms.Lambda(lambda x: torch.flatten(x))
+        ])
         train_kwargs = {"batch_size": self.context["batch_size"]}
         train_dataset = datasets.MNIST('../data', train=True, download=True,
                        transform=transform)
         self.train_loader = DataLoader(train_dataset, **train_kwargs)
+        self.num_classes = self.context["num_classes"]
+        self.class_sizes = torch.zeros((self.num_classes)).to(self.context["device"])
+        for _, labels in self.train_loader:
+            labels = labels.to(self.context["device"])
+            class_count = torch.nn.functional.one_hot(labels, num_classes=self.num_classes).sum(dim = 0)
+            self.class_sizes += class_count
+        self.class_sizes = self.class_sizes.type(torch.int)

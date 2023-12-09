@@ -24,7 +24,6 @@ class NCProbe():
         self.layerwise_class_means = {}
         self.layerwise_class_sums = {}
         self.layerwise_class_cov = {}
-        self.class_sizes = torch.zeros((self.num_classes)).to(self.context["device"])
 
     def print_state(self):
         logger.info("layerwise_global_sum: {}".format(self.layerwise_global_sum))
@@ -32,14 +31,6 @@ class NCProbe():
         logger.info("layerwise_class_means: {}".format(self.layerwise_class_means))
         logger.info("layerwise_class_sums: {}".format(self.layerwise_class_sums))
         logger.info("layerwise_class_cov: {}".format(self.layerwise_class_cov))
-        logger.info("class_sizes: {}".format(self.class_sizes))
-
-    def compute_class_sizes(self, training_data):
-        for _, labels in training_data.nc_train_loader:
-            labels = labels.to(self.context["device"])
-            class_count = torch.nn.functional.one_hot(labels, num_classes=self.num_classes).sum(dim = 0)
-            self.class_sizes += class_count
-
 
     def _initialize_placeholders(self, layer_idx, feat_size):
         """
@@ -135,7 +126,7 @@ class NCProbe():
         """
         class_sizes = class_sizes.cpu().numpy()
         num_classes = class_sizes.shape[0]
-        assert N == torch.sum(class_sizes)
+        assert N == sum(class_sizes)
         Tr_Sigma_W = 0
         Tr_Sigma_B = 0
         x_idx = 0
@@ -146,6 +137,7 @@ class NCProbe():
             class_block_sums[c] = block_sum
             x_idx += class_size
 
+        logger.info("class block sums: {}".format(class_block_sums))
         Tr_Sigma_G = torch.sum(K)/(N**2)
         Tr_Sigma_tilde_T = torch.sum(torch.diag(K)) / N
         Tr_Sigma_tilde_B = 0
@@ -174,7 +166,7 @@ class NCProbe():
         if layer_type not in ["affine", "activation"]:
             raise ValueError("layer_type should be one of ['affine', 'activation']")
         device = self.context["device"]
-        self.compute_class_sizes(training_data=training_data)
+        self.class_sizes = training_data.class_sizes
         # one-pass to compute class means
         for data, labels in training_data.train_loader:
             model.zero_grad()
@@ -211,6 +203,7 @@ class DataNCProbe(NCProbe):
             training_data: torch data loader for convenient mini-batching
         """
         device = self.context["device"]
+        self.class_sizes = training_data.class_sizes
         # one-pass to compute class means
         for data, labels in training_data.train_loader:
             data, labels = data.to(device), labels.to(device)
@@ -247,6 +240,7 @@ class NTKNCProbe(NCProbe):
     def capture(self, model, training_data):
         device = self.context["device"]
         model_copy = copy.deepcopy(model)
+        self.class_sizes = training_data.class_sizes
         # one-pass to compute class means
         ntk_feat_matrix = torch.zeros(0).to(device)
         for data, labels in training_data.train_loader:
@@ -296,7 +290,8 @@ class KernelProbe():
                 K_ii = nngp_kernel[i, i]
                 K_ij = nngp_kernel[i, j]
                 K_jj = nngp_kernel[j, j]
-                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
+                ratio = K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6)
+                theta = torch.arccos(torch.clip(ratio, min=-1, max=1))
                 val = (torch.sqrt(K_ii*K_jj)*( torch.sin(theta) + (torch.pi - theta)*torch.cos(theta) )) /(2*torch.pi)
                 nngp_relu_kernel[i,j] = val
         return nngp_relu_kernel
@@ -309,7 +304,8 @@ class KernelProbe():
                 K_ii = nngp_kernel[i, i]
                 K_ij = nngp_kernel[i, j]
                 K_jj = nngp_kernel[j, j]
-                theta = torch.arccos( K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6) )
+                ratio = K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6)
+                theta = torch.arccos(torch.clip(ratio, min=-1, max=1))
                 val = (torch.pi - theta) /(2*torch.pi)
                 nngp_relu_derivative_kernel[i,j] = val
         return nngp_relu_derivative_kernel

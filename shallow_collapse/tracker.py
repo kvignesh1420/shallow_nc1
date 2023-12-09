@@ -58,40 +58,34 @@ class MetricTracker():
         affine_features_nc_metrics = self.affine_features_nc_probe.capture(model=model, training_data=training_data, layer_type="affine")
         affine_features_nc_df = pd.DataFrame.from_dict(affine_features_nc_metrics)
         logger.debug("\nmetrics of layer-wise affine features at epoch {}:\n{}".format(epoch, affine_features_nc_df))
-
-        for l in range(self.context["L"]):
-            if l not in self.epoch_affine_features_nc_metrics:
-                self.epoch_affine_features_nc_metrics[l] = OrderedDict()
-            self.epoch_affine_features_nc_metrics[l][epoch] = affine_features_nc_metrics[l]
+        self.epoch_affine_features_nc_metrics[epoch] = affine_features_nc_metrics
 
     def plot_affine_features_nc_metrics(self):
-        for l in range(self.context["L"]-1):
-            x = list(self.epoch_affine_features_nc_metrics[l].keys())
-            values = list(self.epoch_affine_features_nc_metrics[l].values())
+        epochs = list(self.epoch_affine_features_nc_metrics.keys())
+        for epoch in epochs:
+            x = list(self.epoch_affine_features_nc_metrics[epoch].keys())
+            values = list(self.epoch_affine_features_nc_metrics[epoch].values())
             df = pd.DataFrame(values, index=x).astype(float)
-            logger.info("NC1 metrics for affine features {} across epochs:\n{}".format(l, df))
-            df.plot(grid=True, xlabel="epoch", ylabel="NC1 ($\log10$)")
-            plt.savefig("{}affine_features_nc_metrics_layer{}.jpg".format(self.context["vis_dir"], l))
+            logger.info("NC1 metrics for affine features across depth at epoch{}:\n{}".format(epoch, df))
+            df.plot(grid=True, xlabel="layer idx", ylabel="NC1 ($\log10$)")
+            plt.savefig("{}affine_features_nc_metrics_epoch{}.jpg".format(self.context["vis_dir"], epoch))
             plt.clf()
 
     def store_activation_features_nc_metrics(self, model, training_data, epoch):
         activation_features_nc_metrics = self.activation_features_nc_probe.capture(model=model, training_data=training_data, layer_type="activation")
         activation_features_nc_df = pd.DataFrame.from_dict(activation_features_nc_metrics)
         logger.debug("\nmetrics of layer-wise activation features at epoch {}:\n{}".format(epoch, activation_features_nc_df))
-
-        for l in range(self.context["L"]):
-            if l not in self.epoch_activation_features_nc_metrics:
-                self.epoch_activation_features_nc_metrics[l] = OrderedDict()
-            self.epoch_activation_features_nc_metrics[l][epoch] = activation_features_nc_metrics[l]
+        self.epoch_activation_features_nc_metrics[epoch] = activation_features_nc_metrics
 
     def plot_activation_features_nc_metrics(self):
-        for l in range(self.context["L"]-1):
-            x = list(self.epoch_activation_features_nc_metrics[l].keys())
-            values = list(self.epoch_activation_features_nc_metrics[l].values())
+        epochs = list(self.epoch_activation_features_nc_metrics.keys())
+        for epoch in epochs:
+            x = list(self.epoch_activation_features_nc_metrics[epoch].keys())
+            values = list(self.epoch_activation_features_nc_metrics[epoch].values())
             df = pd.DataFrame(values, index=x).astype(float)
-            logger.info("NC1 metrics for activation features {} across epochs:\n{}".format(l, df))
-            df.plot(grid=True, xlabel="epoch", ylabel="NC1 ($\log10$)")
-            plt.savefig("{}activation_features_nc_metrics_layer{}.jpg".format(self.context["vis_dir"], l))
+            logger.info("NC1 metrics for activation features across depth at epoch{}:\n{}".format(epoch, df))
+            df.plot(grid=True, xlabel="layer idx", ylabel="NC1 ($\log10$)")
+            plt.savefig("{}activation_features_nc_metrics_epoch{}.jpg".format(self.context["vis_dir"], epoch))
             plt.clf()
 
     def compute_emp_nngp_nc1_hat_ratio(self):
@@ -106,6 +100,8 @@ class MetricTracker():
     def plot_loss(self):
         x = list(self.epoch_loss.keys())
         values = list(self.epoch_loss.values())
+        if len(values) == 0:
+            return
         df = pd.DataFrame(values, index=x).astype(float)
         logger.info("loss across epochs:\n{}".format(df))
         df.plot(grid=True, xlabel="epoch", ylabel="loss")
@@ -124,11 +120,29 @@ class MetricTracker():
         plt.savefig("{}accuracy.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
-    def store_kernels(self, model, training_data):
+    def store_lim_kernels(self, training_data):
         self.kernel_probe.compute_lim_nngp_kernels(training_data=training_data)
         self.kernel_probe.compute_lim_ntk_kernels(training_data=training_data)
+
+    def store_emp_kernels(self, model, training_data):
         self.kernel_probe.compute_emp_nngp_kernels(model=model, training_data=training_data)
         self.kernel_probe.compute_emp_ntk_kernel(model=model, training_data=training_data)
+
+    def compute_lim_kernels_nc1(self, training_data):
+        lim_kernel_nc1 = {"nngp": [], "ntk": [], "nngp_relu": []}
+        L = self.context["L"]
+        N = self.context["N"]
+        for l in range(L):
+            nngp_kernel = self.kernel_probe.nngp_kernels[l]
+            ntk_kernel = self.kernel_probe.ntk_kernels[l]
+            nngp_relu_kernel = self.kernel_probe.nngp_relu_kernels[l]
+            for name, K in [("nngp", nngp_kernel), ("ntk", ntk_kernel), ("nngp_relu", nngp_relu_kernel)]:
+                nc1_val = NCProbe.compute_kernel_nc1(
+                    K=K, N=N, class_sizes=training_data.class_sizes)
+                lim_kernel_nc1[name].append(nc1_val)
+        df = pd.DataFrame(lim_kernel_nc1, index=range(L))
+        logger.info("limiting kernel NC1 values:\n{}".format(df))
+
 
     def plot_lim_nngp_kernels(self):
         """

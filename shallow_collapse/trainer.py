@@ -28,7 +28,9 @@ class Trainer():
             self.tracker.store_affine_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
             self.tracker.store_activation_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
         if self.context["probe_kernels"] and epoch == 0:
-            self.tracker.store_kernels(model=model, training_data=training_data)
+            self.tracker.store_lim_kernels(training_data=training_data)
+            self.tracker.compute_lim_kernels_nc1(training_data=training_data)
+            self.tracker.store_emp_kernels(model=model, training_data=training_data)
 
     def plot_pred(self, model, training_data):
         if isinstance(training_data, Gaussian1D):
@@ -75,8 +77,11 @@ class Trainer():
             for data, labels in training_data.train_loader:
                 model.zero_grad()
                 data, labels = data.to(device), labels.to(device)
-                labels = F.one_hot(labels.type(torch.int64), num_classes=self.context["num_classes"])
-                labels = labels.type(torch.float)
+                if self.context["out_features"] > 1:
+                    labels = F.one_hot(labels.type(torch.int64), num_classes=self.context["num_classes"])
+                    labels = labels.type(torch.float)
+                else:
+                    labels = labels.unsqueeze(1)
                 pred = model(data)
                 loss = loss_criterion(pred, labels)
                 loss.backward()
