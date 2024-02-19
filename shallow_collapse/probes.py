@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch_scatter import scatter
 
 PLACEHOLDER_LAYER_ID = -1
+EPSILON = 1e-6
 
 class NCProbe():
     """
@@ -208,13 +209,13 @@ class DataNCProbe(NCProbe):
         for data, labels in training_data.train_loader:
             data, labels = data.to(device), labels.to(device)
             features = {PLACEHOLDER_LAYER_ID : data}
-            self._track_sums(features=features, labels=labels)
+            self._track_sums(features=features, labels=labels.type(torch.int64))
         self._compute_means()
         # second-pass to compute covariance matrices
         for data, labels in training_data.train_loader:
             data, labels = data.to(device), labels.to(device)
             features = {PLACEHOLDER_LAYER_ID : data}
-            self._track_cov(features=features, labels=labels)
+            self._track_cov(features=features, labels=labels.type(torch.int64))
         self._compute_cov()
         nc_metrics = self.compute_nc1()
         return nc_metrics
@@ -282,7 +283,7 @@ class KernelProbe():
     def __init__(self, context) -> None:
         self.context = context
 
-    def _nngp_relu_kernel_helper(self, nngp_kernel):
+    def _nngp_relu_kernel_helper_old(self, nngp_kernel):
         N = self.context["N"]
         nngp_relu_kernel = torch.zeros_like(nngp_kernel)
         for i in range(N):
@@ -296,7 +297,21 @@ class KernelProbe():
                 nngp_relu_kernel[i,j] = val
         return nngp_relu_kernel
 
-    def _nngp_relu_derivative_kernel_helper(self, nngp_kernel):
+    def _nngp_relu_kernel_helper(self, nngp_kernel):
+        nngp_relu_kernel = torch.zeros_like(nngp_kernel)
+        diag_vals = torch.diag(nngp_kernel, 0)
+        diag_vals_sqrt = torch.sqrt(diag_vals)
+        diag_matrix_sqrt = torch.diag(diag_vals_sqrt)
+
+        diag_vals_inv_sqrt = torch.sqrt(1.0/(diag_vals + EPSILON))
+        diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
+        ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
+
+        thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
+        nngp_relu_kernel = diag_matrix_sqrt @ (( torch.sin(thetas) + (torch.pi - thetas)*torch.cos(thetas) )/(2*torch.pi)) @ diag_matrix_sqrt
+        return nngp_relu_kernel
+
+    def _nngp_relu_derivative_kernel_helper_old(self, nngp_kernel):
         N = self.context["N"]
         nngp_relu_derivative_kernel = torch.zeros_like(nngp_kernel)
         for i in range(N):
@@ -308,6 +323,16 @@ class KernelProbe():
                 theta = torch.arccos(torch.clip(ratio, min=-1, max=1))
                 val = (torch.pi - theta) /(2*torch.pi)
                 nngp_relu_derivative_kernel[i,j] = val
+        return nngp_relu_derivative_kernel
+
+    def _nngp_relu_derivative_kernel_helper(self, nngp_kernel):
+        nngp_relu_derivative_kernel = torch.zeros_like(nngp_kernel)
+        diag_vals = torch.diag(nngp_kernel, 0)
+        diag_vals_inv_sqrt = torch.sqrt(1.0/(diag_vals + EPSILON))
+        diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
+        ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
+        thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
+        nngp_relu_derivative_kernel = (torch.pi - thetas) /(2*torch.pi)
         return nngp_relu_derivative_kernel
 
     def compute_lim_nngp_kernels(self, training_data):

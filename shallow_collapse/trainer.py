@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from shallow_collapse.tracker import MetricTracker
-from shallow_collapse.data import Gaussian1D
 
 
 class Trainer():
@@ -20,6 +19,8 @@ class Trainer():
         self.tracker = tracker
 
     def apply_tracker(self, model, training_data, loss, epoch):
+        if epoch == 0:
+            self.tracker.store_data_nc_metrics(training_data=training_data)
         if loss is not None:
             loss_value = loss.cpu().detach().numpy()
             logger.debug("epoch: {} loss: {}".format(epoch, loss_value))
@@ -27,13 +28,15 @@ class Trainer():
         if self.context["probe_features"]:
             self.tracker.store_affine_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
             self.tracker.store_activation_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
-        if self.context["probe_kernels"] and epoch == 0:
+        if self.context["probe_kernels"] and self.context["activation"] == "relu" and epoch == 0:
             self.tracker.store_lim_kernels(training_data=training_data)
             self.tracker.compute_lim_kernels_nc1(training_data=training_data)
+        if self.context["probe_kernels"] and self.context["activation"] == "relu" and epoch == self.context["num_epochs"]:
             self.tracker.store_emp_kernels(model=model, training_data=training_data)
+            self.tracker.compute_emp_kernels_nc1(training_data=training_data)
 
     def plot_pred(self, model, training_data):
-        if isinstance(training_data, Gaussian1D):
+        if self.context["out_features"] == 1:
             pred=model(training_data.X)
             pred = pred[training_data.perm_inv].detach().cpu().numpy()
             plt.plot(pred)
@@ -46,15 +49,18 @@ class Trainer():
         if self.context["probe_features"]:
             self.tracker.plot_affine_features_nc_metrics()
             self.tracker.plot_activation_features_nc_metrics()
-        if self.context["probe_kernels"]:
+        # plot only for relu as of now.
+        if self.context["probe_kernels"] and self.context["activation"] == "relu":
+            self.tracker.plot_lim_kernels_nc1()
             self.tracker.plot_lim_nngp_kernels()
             self.tracker.plot_lim_ntk_kernels()
             self.tracker.plot_lim_kernel_spectrums()
-            self.tracker.plot_lim_kernels_circle2d(training_data=training_data)
+            # self.tracker.plot_lim_kernels_circle2d(training_data=training_data)
+            self.tracker.plot_emp_kernels_nc1()
             self.tracker.plot_emp_nngp_kernels()
             self.tracker.plot_emp_ntk_kernel()
             self.tracker.plot_emp_kernel_spectrums()
-            self.tracker.plot_emp_kernels_circule2d(training_data=training_data)
+            # self.tracker.plot_emp_kernels_circule2d(training_data=training_data)
 
     def train(self, model, training_data):
         device = self.context["device"]

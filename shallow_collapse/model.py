@@ -1,5 +1,32 @@
+import numpy as np
 import torch
 from typing import Dict, Any
+
+class Erf(torch.nn.Module):
+    r"""Applies the erf function element-wise:
+
+    Shape:
+        - Input: :math:`(*)`, where :math:`*` means any number of dimensions.
+        - Output: :math:`(*)`, same shape as the input.
+
+    Examples::
+
+        >>> m = Erf()
+        >>> input = torch.randn(2)
+        >>> output = m(input)
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input):
+        return torch.special.erf(input)
+
+
+activation_cls_map = {
+    "relu": torch.nn.ReLU,
+    "erf": Erf
+}
 
 class MLPModel(torch.nn.Module):
     """
@@ -13,8 +40,11 @@ class MLPModel(torch.nn.Module):
         self.in_features = context["in_features"]
         self.hidden_features = context["hidden_features"]
         self.out_features = context["out_features"]
+        self.hidden_weight_std = context["hidden_weight_std"]
+        self.final_weight_std = context["final_weight_std"]
         self.bias_std = context["bias_std"]
         self.use_batch_norm = context["use_batch_norm"]
+        self.activation_cls = activation_cls_map[context["activation"]]
         self._initialize_features()
         self._initialize_layers()
         self._assign_hooks()
@@ -30,10 +60,10 @@ class MLPModel(torch.nn.Module):
             out_features=self.hidden_features,
             bias=True
         )
-        torch.nn.init.kaiming_normal_(self.first_layer.weight, nonlinearity="relu")
+        torch.nn.init.normal_(self.first_layer.weight, std=(self.hidden_weight_std/np.sqrt(self.in_features)))
         torch.nn.init.normal_(self.first_layer.bias, std=self.bias_std)
         self.hidden_layers = [self.first_layer]
-        self.activation_layers = [torch.nn.ReLU()]
+        self.activation_layers = [self.activation_cls()]
         if self.use_batch_norm:
             self.normalization_layers = [torch.nn.BatchNorm1d(self.hidden_features)]
 
@@ -43,10 +73,10 @@ class MLPModel(torch.nn.Module):
                 out_features=self.hidden_features,
                 bias=True
             )
-            torch.nn.init.kaiming_normal_(layer.weight, nonlinearity="relu")
+            torch.nn.init.normal_(layer.weight, std=(self.hidden_weight_std/np.sqrt(self.hidden_features)))
             torch.nn.init.normal_(layer.bias, std=self.bias_std)
             self.hidden_layers.append(layer)
-            self.activation_layers.append(torch.nn.ReLU())
+            self.activation_layers.append(self.activation_cls())
             if self.use_batch_norm:
                 self.normalization_layers.append(torch.nn.BatchNorm1d(self.hidden_features))
 
@@ -55,7 +85,7 @@ class MLPModel(torch.nn.Module):
             out_features=self.out_features,
             bias=True
         )
-        torch.nn.init.kaiming_normal_(self.final_layer.weight, nonlinearity="relu")
+        torch.nn.init.normal_(self.final_layer.weight, std=(self.final_weight_std/np.sqrt(self.hidden_features)))
         torch.nn.init.normal_(self.final_layer.bias, std=self.bias_std)
         self.hidden_layers.append(self.final_layer)
         self.activation_layers.append(torch.nn.Identity())

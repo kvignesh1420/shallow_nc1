@@ -11,16 +11,14 @@ import torch
 # - Setting random seed to 9, leads to accuracy 1 even after 1 epoch. However, observe that the data is linearly separable
 #   from the get go!
 from shallow_collapse.model import MLPModel
-from shallow_collapse.data import Gaussian1D
-from shallow_collapse.data import Circle2D
+from shallow_collapse.data import GaussiandD
 from shallow_collapse.data import MNIST2Class
 from shallow_collapse.data import MNIST
 from shallow_collapse.tracker import MetricTracker
 from shallow_collapse.trainer import Trainer
 
 data_cls_map = {
-    "Gaussian1D": Gaussian1D,
-    "Circle2D": Circle2D,
+    "GaussiandD": GaussiandD,
     "MNIST2Class": MNIST2Class,
     "MNIST": MNIST
 }
@@ -59,23 +57,30 @@ def setup_runtime_context(context):
 
 def main():
     exp_context = {
-        "training_data_cls": "MNIST",
-        "N": 60000,
-        "batch_size": 256,
-        "num_epochs": 10,
+        "training_data_cls": "GaussiandD",
+        "N": 1024,
+        # note that the mean/std values will be broadcasted across `in_features`
+        "class_means": [-2, 2],
+        "class_stds": [0.3, 0.3],
+        "class_sizes": [512, 512],
+        "batch_size": 1024,
+        "num_epochs": 1000,
         "L": 2,
-        "in_features": 784,
+        "in_features": 1,
         "hidden_features": 1024,
         "out_features": 1,
-        "num_classes" : 10,
-        "use_batch_norm": True,
+        "num_classes" : 2,
+        "use_batch_norm": False,
         "lr": 1e-3,
         "momentum": 0.0,
         "weight_decay": 5e-4,
-        "bias_std": 1,
+        "bias_std": 0,
+        "hidden_weight_std": 1,
+        "final_weight_std": 1,
+        "activation": "erf",
         "probe_features": True,
-        "probe_kernels": False,
-        "probing_frequency": 1
+        "probe_kernels": True,
+        "probing_frequency": 100
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
