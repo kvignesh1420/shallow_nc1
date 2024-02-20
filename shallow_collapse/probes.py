@@ -282,6 +282,9 @@ class NTKNCProbe(NCProbe):
 class KernelProbe():
     def __init__(self, context) -> None:
         self.context = context
+        self.emp_nngp_affine_kernels = OrderedDict()
+        self.emp_nngp_activation_kernels = OrderedDict()
+        self.emp_ntk_kernels = OrderedDict()
 
     def _nngp_erf_kernel_helper(self, nngp_kernel):
         diag_vals = torch.diag(nngp_kernel, 0)
@@ -391,26 +394,25 @@ class KernelProbe():
             self.ntk_kernels[l] = self.nngp_kernels[l] + self.ntk_kernels[l-1] * self.nngp_activation_derivative_kernels[l-1]
             self.nngp_activation_derivative_kernels[l] = self._nngp_activation_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[l])
 
-    def compute_emp_nngp_kernels(self, model, training_data):
-        # the usual nngp
-        self.emp_nngp_affine_kernels = OrderedDict()
-        # the post-activation nngp
-        self.emp_nngp_activation_kernels = OrderedDict()
+    def compute_emp_nngp_kernels(self, model, training_data, epoch):
         model.zero_grad()
         X = training_data.X[training_data.perm_inv].to(self.context["device"])
         _ = model(X)
         # affine feature kernels
         for l in range(self.context["L"]):
-            features = model.affine_features[l]
-            # features = F.normalize(features, p=2, dim=1)
-            emp_nngp_kernel = features @ features.t()
-            self.emp_nngp_affine_kernels[l] = emp_nngp_kernel
+            affine_features = model.affine_features[l]
+            affine_kernel = affine_features @ affine_features.t()
+            if l not in self.emp_nngp_affine_kernels:
+                self.emp_nngp_affine_kernels[l] = {}
+            self.emp_nngp_affine_kernels[l].update({epoch: affine_kernel})
         # activation feature kernels
         for l in range(self.context["L"]):
-            features = model.activation_features[l]
+            activation_features = model.activation_features[l]
             # features = F.normalize(features, p=2, dim=1)
-            emp_nngp_kernel = features @ features.t()
-            self.emp_nngp_activation_kernels[l] = emp_nngp_kernel
+            activation_kernel = activation_features @ activation_features.t()
+            if l not in self.emp_nngp_activation_kernels:
+                self.emp_nngp_activation_kernels[l] = {}
+            self.emp_nngp_activation_kernels[l].update({epoch: activation_kernel})
 
     def _get_ntk_feat(self, model_copy):
         device = self.context["device"]
@@ -422,7 +424,7 @@ class KernelProbe():
         logger.debug("ntk_feat shape: {}".format(ntk_feat.shape))
         return ntk_feat
 
-    def compute_emp_ntk_kernel(self, model, training_data):
+    def compute_emp_ntk_kernel(self, model, training_data, epoch):
         assert self.context["batch_size"] == self.context["N"]
         device = self.context["device"]
         model_copy = copy.deepcopy(model)
@@ -438,7 +440,7 @@ class KernelProbe():
                 pred.backward(retain_graph=True)
                 ntk_feat = self._get_ntk_feat(model_copy=model_copy)
                 ntk_feat_matrix = torch.cat([ntk_feat_matrix, ntk_feat], 0)
-                # logger.info("ntk_feat_matrix shape: {}".format(ntk_feat_matrix.shape))
+                logger.info("ntk_feat_matrix shape: {}".format(ntk_feat_matrix.shape))
         features = ntk_feat_matrix[training_data.perm_inv]
         # features = F.normalize(features, p=2, dim=1)
-        self.emp_ntk_kernel = features @ features.t()
+        self.emp_ntk_kernels[epoch] = features @ features.t()

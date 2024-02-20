@@ -142,8 +142,6 @@ class MetricTracker():
             plt.savefig("{}non_log_trace_S_W_div_S_B_layer{}.jpg".format(self.context["vis_dir"], layer_idx+1))
             plt.clf()
 
-
-
     def compute_emp_nngp_nc1_hat_ratio(self):
         data_nc1_hat = self.data_nc_metrics[PLACEHOLDER_LAYER_ID]["trace_S_W_div_S_B"]
         activation_features_nc1_hat = self.epoch_activation_features_nc_metrics[0][0]["trace_S_W_div_S_B"]
@@ -180,9 +178,10 @@ class MetricTracker():
         self.kernel_probe.compute_lim_nngp_kernels(training_data=training_data)
         self.kernel_probe.compute_lim_ntk_kernels(training_data=training_data)
 
-    def store_emp_kernels(self, model, training_data):
-        self.kernel_probe.compute_emp_nngp_kernels(model=model, training_data=training_data)
-        self.kernel_probe.compute_emp_ntk_kernel(model=model, training_data=training_data)
+    def store_emp_kernels(self, model, training_data, epoch):
+        self.kernel_probe.compute_emp_nngp_kernels(model=model, training_data=training_data, epoch=epoch)
+        # uncomment if needed
+        # self.kernel_probe.compute_emp_ntk_kernel(model=model, training_data=training_data, epoch=epoch)
 
     def compute_lim_kernels_nc1(self, training_data):
         L = self.context["L"]
@@ -206,34 +205,6 @@ class MetricTracker():
         logger.info("limiting kernel NC1 values:\n{}".format(df))
         df.plot(grid=True, xlabel="layer idx", ylabel="$\log_{10}(Tr(\Sigma_W)/Tr(\Sigma_B))$")
         plt.savefig("{}lim_kernels_nc1.jpg".format(self.context["vis_dir"]))
-        plt.clf()
-
-    def compute_emp_kernels_nc1(self, training_data):
-        emp_kernels_nc1 = {"nngp": [], "ntk": [], "nngp_act": []}
-        L = self.context["L"]
-        N = self.context["N"]
-        for l in range(L):
-            nngp_kernel = self.kernel_probe.emp_nngp_affine_kernels[l]
-            nngp_activation_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
-            ntk_kernel = self.kernel_probe.emp_ntk_kernel
-            arr = [("nngp", nngp_kernel), ("nngp_act", nngp_activation_kernel), ("ntk", ntk_kernel)]
-            for name, K in arr:
-                nc1_val = NCProbe.compute_kernel_nc1(
-                    K=K, N=N, class_sizes=training_data.class_sizes)
-                nc1_val = torch.log10(nc1_val)
-                emp_kernels_nc1[name].append(nc1_val.cpu().numpy())
-        self.emp_kernels_nc1 = emp_kernels_nc1
-
-    def plot_emp_kernels_nc1(self):
-        L = self.context["L"]
-        df = pd.DataFrame(self.emp_kernels_nc1, index=list(range(L))).astype(float)
-        logger.info("Emp kernel NC1 values:\n{}".format(df))
-        fig,ax = plt.subplots()
-        ax.set_ylabel("$\log_{10}(Tr(\Sigma_W)/Tr(\Sigma_B))$")
-        ax.set_xlabel("layer idx")
-        df.plot.line(ax=ax, grid=True, y=["nngp", "nngp_act"])
-        df.plot.line(ax=ax, grid=True, y=["ntk"], linestyle='-.')
-        plt.savefig("{}emp_kernels_nc1.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
     def plot_lim_nngp_kernels(self):
@@ -272,28 +243,6 @@ class MetricTracker():
             plt.savefig("{}lim_ntk_layer{}.jpg".format(self.context["vis_dir"], l+1))
             plt.clf()
 
-    # def plot_lim_kernels_circle2d(self, training_data):
-    #     """
-    #     Use only for cicular data
-    #     """
-    #     if not isinstance(training_data, Circle2D):
-    #         return
-    #     N=self.context["N"]
-    #     angles = training_data.thetas[training_data.perm_inv]
-    #     L = self.context["L"]
-    #     for l in range(L):
-    #         nngp_kernel = self.kernel_probe.nngp_kernels[l]
-    #         ntk_kernel = self.kernel_probe.ntk_kernels[l]
-    #         for K, label in [(nngp_kernel, "nngp"), (ntk_kernel, "ntk")]:
-    #             sim = K[N//2]
-    #             plt.plot(angles, sim, label=label)
-    #         plt.xlabel("angle (x,x')")
-    #         plt.ylabel("K(.,.)")
-    #         plt.grid()
-    #         plt.legend()
-    #         plt.savefig("{}lim_kernels_circle2d_layer{}.jpg".format(self.context["vis_dir"], l))
-    #         plt.clf()
-
     def plot_lim_kernel_spectrums(self):
         """
         Plot the spectrum of the lim nngp and ntk kernels
@@ -313,80 +262,44 @@ class MetricTracker():
             plt.savefig("{}{}".format(self.context["vis_dir"], "lim_kernel_spectrums_layer{}".format(l+1)))
             plt.clf()
 
+    def plot_epoch_diff_kernel(self, epoch_kernels, name):
+        epochs = list(epoch_kernels.keys())
+        initial_kernel = epoch_kernels[epochs[0]]
+        final_kernel = epoch_kernels[epochs[-1]]
+        diff_kernel = final_kernel - initial_kernel
+        plt.imshow(diff_kernel.cpu(), cmap='viridis')
+        plt.colorbar()
+        plt.savefig(name)
+        plt.clf()
+
     def plot_emp_nngp_kernels(self):
         L = self.context["L"]
         for l in range(L):
-            emp_nngp_affine_kernel = self.kernel_probe.emp_nngp_affine_kernels[l]
-            plt.imshow(emp_nngp_affine_kernel.cpu(), cmap='viridis')
+            epoch_emp_nngp_affine_kernels = self.kernel_probe.emp_nngp_affine_kernels[l]
+            for epoch, K in epoch_emp_nngp_affine_kernels.items():
+                plt.imshow(K.cpu(), cmap='viridis')
+                plt.colorbar()
+                plt.savefig("{}emp_nngp_affine_kernel_layer{}_epoch{}.jpg".format(self.context["vis_dir"], l+1, epoch))
+                plt.clf()
+
+            name = "{}emp_nngp_affine_kernel_initial_final_diff_layer{}.jpg".format(self.context["vis_dir"], l+1)
+            self.plot_epoch_diff_kernel(epoch_kernels=epoch_emp_nngp_affine_kernels, name=name)
+
+            epoch_emp_nngp_activation_kernels = self.kernel_probe.emp_nngp_activation_kernels[l]
+            for epoch, K in epoch_emp_nngp_activation_kernels.items():
+                plt.imshow(K.cpu(), cmap='viridis')
+                plt.colorbar()
+                plt.savefig("{}emp_nngp_activation_kernel_layer{}_epoch{}.jpg".format(self.context["vis_dir"], l+1, epoch))
+                plt.clf()
+
+            name = "{}emp_nngp_activation_kernel_initial_final_diff_layer{}.jpg".format(self.context["vis_dir"], l+1)
+            self.plot_epoch_diff_kernel(epoch_kernels=epoch_emp_nngp_activation_kernels, name=name)
+
+    def plot_emp_ntk_kernels(self):
+        emp_ntk_kernels = self.kernel_probe.emp_ntk_kernels
+        for epoch, K in emp_ntk_kernels.items():
+            plt.imshow(K.cpu(), cmap='viridis')
             plt.colorbar()
-            plt.savefig("{}emp_nngp_affine_kernel_layer{}.jpg".format(self.context["vis_dir"], l+1))
+            plt.savefig("{}emp_ntk_kernel_epoch{}.jpg".format(self.context["vis_dir"], epoch))
             plt.clf()
-            emp_nngp_activation_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
-            plt.imshow(emp_nngp_activation_kernel.cpu(), cmap='viridis')
-            plt.colorbar()
-            plt.savefig("{}emp_nngp_activation_kernel_layer{}.jpg".format(self.context["vis_dir"], l+1))
-            plt.clf()
-
-    def plot_emp_ntk_kernel(self):
-        emp_ntk_kernel = self.kernel_probe.emp_ntk_kernel
-        plt.imshow(emp_ntk_kernel.cpu(), cmap='viridis')
-        plt.colorbar()
-        plt.savefig("{}emp_ntk_kernel.jpg".format(self.context["vis_dir"]))
-        plt.clf()
-
-    # def plot_emp_kernels_circule2d(self, training_data):
-    #     """
-    #     Use only for cicular data
-    #     """
-    #     if not isinstance(training_data, Circle2D):
-    #         return
-    #     N=self.context["N"]
-    #     angles = training_data.thetas[training_data.perm_inv]
-    #     L = self.context["L"]
-    #     for l in range(L):
-    #         emp_nngp_affine_kernel = self.kernel_probe.emp_nngp_affine_kernels[l]
-    #         emp_nngp_activation_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
-    #         for K, label in [(emp_nngp_affine_kernel, "affine"), (emp_nngp_activation_kernel, "activation")]:
-    #             sim = K[N//2]
-    #             plt.plot(angles, sim, label=label)
-    #         plt.xlabel("angle (x,x')")
-    #         plt.ylabel("emp NNGP")
-    #         plt.grid()
-    #         plt.legend()
-    #         plt.savefig("{}emp_nngp_kernels_circle2d_layer{}.jpg".format(self.context["vis_dir"], l))
-    #         plt.clf()
-    #     emp_ntk_kernel = self.kernel_probe.emp_ntk_kernel
-    #     sim = emp_ntk_kernel[N//2]
-    #     plt.plot(angles, sim)
-    #     plt.xlabel("angle (x,x')")
-    #     plt.ylabel("emp NTK")
-    #     plt.grid()
-    #     plt.savefig("{}emp_ntk_kernel_circle2d.jpg".format(self.context["vis_dir"]))
-    #     plt.clf()
-
-    def plot_emp_kernel_spectrums(self):
-        N=self.context["N"]
-        L = self.context["L"]
-        for l in range(L):
-            emp_nngp_affine_kernel = self.kernel_probe.emp_nngp_affine_kernels[l]
-            emp_nngp_activation_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
-            for K, label in [(emp_nngp_affine_kernel, "affine"), (emp_nngp_activation_kernel, "activation")]:
-                S = torch.linalg.svdvals(K)
-                log10_S = torch.log10(S)
-                plt.plot(log10_S.cpu(), label=label)
-            plt.xlabel("k")
-            plt.ylabel("$\log_{10}(\lambda_k)$")
-            plt.grid()
-            plt.legend()
-            plt.savefig("{}{}".format(self.context["vis_dir"], "emp_nngp_kernel_spectrums_layer{}".format(l+1)))
-            plt.clf()
-        emp_ntk_kernel = self.kernel_probe.emp_ntk_kernel
-        S = torch.linalg.svdvals(emp_ntk_kernel)
-        log10_S = torch.log10(S)
-        plt.plot(log10_S.cpu())
-        plt.xlabel("k")
-        plt.ylabel("$\log_10(\lambda_k)$")
-        plt.grid()
-        plt.savefig("{}{}".format(self.context["vis_dir"], "emp_ntk_kernel_spectrum"))
-        plt.clf()
 

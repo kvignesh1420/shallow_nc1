@@ -31,9 +31,8 @@ class Trainer():
         if self.context["probe_kernels"] and epoch == 0:
             self.tracker.store_lim_kernels(training_data=training_data)
             self.tracker.compute_lim_kernels_nc1(training_data=training_data)
-        # if self.context["probe_kernels"] and epoch == self.context["num_epochs"]:
-            # self.tracker.store_emp_kernels(model=model, training_data=training_data)
-            # self.tracker.compute_emp_kernels_nc1(training_data=training_data)
+        if self.context["probe_kernels"]:
+            self.tracker.store_emp_kernels(model=model, training_data=training_data, epoch=epoch)
 
     def plot_pred(self, model, training_data):
         if self.context["out_features"] == 1:
@@ -57,12 +56,8 @@ class Trainer():
             self.tracker.plot_lim_nngp_activation_kernels()
             self.tracker.plot_lim_ntk_kernels()
             self.tracker.plot_lim_kernel_spectrums()
-            # self.tracker.plot_lim_kernels_circle2d(training_data=training_data)
-            # self.tracker.plot_emp_kernels_nc1()
-            # self.tracker.plot_emp_nngp_kernels()
-            # self.tracker.plot_emp_ntk_kernel()
-            # self.tracker.plot_emp_kernel_spectrums()
-            # self.tracker.plot_emp_kernels_circule2d(training_data=training_data)
+            self.tracker.plot_emp_nngp_kernels()
+
 
     def train(self, model, training_data):
         device = self.context["device"]
