@@ -289,7 +289,8 @@ class KernelProbe():
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         ratios = diag_matrix_inv_sqrt @ (2.0*nngp_kernel) @ diag_matrix_inv_sqrt
 
-        thetas = torch.arcsin(torch.clip(ratios, min=-1, max=1))
+        thetas = torch.arcsin(ratios)
+        # thetas = torch.arcsin(torch.clip(ratios, min=-1, max=1))
         nngp_erf_kernel = (2/torch.pi) * thetas
         return nngp_erf_kernel
 
@@ -318,8 +319,9 @@ class KernelProbe():
         diag_vals_inv_sqrt = torch.sqrt(1.0/(diag_vals + EPSILON))
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
-
-        thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
+        
+        thetas = torch.arccos(ratios)
+        # thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
         nngp_relu_kernel = diag_matrix_sqrt @ (( torch.sin(thetas) + (torch.pi - thetas)*torch.cos(thetas) )/(2*torch.pi)) @ diag_matrix_sqrt
         assert torch.allclose(nngp_relu_kernel, nngp_relu_kernel.t())
         return nngp_relu_kernel
@@ -330,7 +332,8 @@ class KernelProbe():
         diag_vals_inv_sqrt = torch.sqrt(1.0/(diag_vals + EPSILON))
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
-        thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
+        thetas = torch.arccos(ratios)
+        # thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
         nngp_relu_derivative_kernel = (torch.pi - thetas) /(2*torch.pi)
         assert torch.allclose(nngp_relu_derivative_kernel, nngp_relu_derivative_kernel.t())
         return nngp_relu_derivative_kernel
