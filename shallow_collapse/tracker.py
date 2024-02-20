@@ -61,6 +61,10 @@ class MetricTracker():
         self.epoch_affine_features_nc_metrics[epoch] = affine_features_nc_metrics
 
     def plot_affine_features_nc_metrics(self):
+        self._plot_epochwise_affine_features_nc_metrics()
+        self._plot_layerwise_affine_features_nc_metrics()
+
+    def _plot_epochwise_affine_features_nc_metrics(self):
         epochs = list(self.epoch_affine_features_nc_metrics.keys())
         for epoch in epochs:
             x = list(self.epoch_affine_features_nc_metrics[epoch].keys())
@@ -70,10 +74,24 @@ class MetricTracker():
             df = pd.DataFrame(values_with_data, index=x_with_data).astype(float)
             # df = pd.DataFrame(values, index=x).astype(float)
             logger.info("NC1 metrics for affine features across depth at epoch{}:\n{}".format(epoch, df))
-            df.plot(grid=True, xlabel="layer idx", ylabel="NC1 ($\log10$)")
+            df.plot(grid=True, xlabel="layer idx", ylabel="$\log10$ (NC1)")
             # for k, v in self.data_nc_metrics[PLACEHOLDER_LAYER_ID].items():
                 # ax.axhline(v, label=k, linestyle="dashed")
             plt.savefig("{}affine_features_nc_metrics_epoch{}.jpg".format(self.context["vis_dir"], epoch))
+            plt.clf()
+
+    def _plot_layerwise_affine_features_nc_metrics(self):
+        epochs = list(self.epoch_affine_features_nc_metrics.keys())
+        for layer_idx in range(self.context["L"]):
+            values = []
+            for epoch in epochs:
+                value = self.epoch_affine_features_nc_metrics[epoch][layer_idx]
+                values.append(value)
+
+            df = pd.DataFrame(values, index=epochs).astype(float)
+            df.plot(grid=True, xlabel="epoch", ylabel="$\log10$ (NC1)")
+            plt.tight_layout()
+            plt.savefig("{}affine_features_nc_metrics_layer{}.jpg".format(self.context["vis_dir"], layer_idx+1))
             plt.clf()
 
     def store_activation_features_nc_metrics(self, model, training_data, epoch):
@@ -83,6 +101,10 @@ class MetricTracker():
         self.epoch_activation_features_nc_metrics[epoch] = activation_features_nc_metrics
 
     def plot_activation_features_nc_metrics(self):
+        self._plot_epochwise_activation_features_nc_metrics()
+        self._plot_layerwise_activation_features_nc_metrics()
+
+    def _plot_epochwise_activation_features_nc_metrics(self):
         epochs = list(self.epoch_activation_features_nc_metrics.keys())
         for epoch in epochs:
             x = list(self.epoch_activation_features_nc_metrics[epoch].keys())
@@ -92,12 +114,35 @@ class MetricTracker():
             df = pd.DataFrame(values_with_data, index=x_with_data).astype(float)
             logger.info("NC1 metrics for activation features across depth at epoch{}:\n{}".format(epoch, df))
             # colors = ["blue", "orange", "green", "red"]
-            df.plot(grid=True, xlabel="layer idx", ylabel="NC1 ($\log10$)")
-            # for (k, v), color in zip(self.data_nc_metrics[PLACEHOLDER_LAYER_ID].items(), colors):
-            #     ax.axhline(v, label=k, linestyle="dashed", color=color)
-            # plt.legend()
+            df.plot(grid=True, xlabel="layer idx", ylabel="$\log10$ (NC1)")
             plt.savefig("{}activation_features_nc_metrics_epoch{}.jpg".format(self.context["vis_dir"], epoch))
             plt.clf()
+
+    def _plot_layerwise_activation_features_nc_metrics(self):
+        epochs = list(self.epoch_activation_features_nc_metrics.keys())
+        for layer_idx in range(self.context["L"]):
+            values = []
+            for epoch in epochs:
+                value = self.epoch_activation_features_nc_metrics[epoch][layer_idx]
+                values.append(value)
+
+            df = pd.DataFrame(values, index=epochs).astype(float)
+            df.plot(grid=True, xlabel="epoch", ylabel="$\log10$ (NC1)")
+            plt.tight_layout()
+            # count layers from 1 as we use 0 for data/input layer
+            plt.savefig("{}activation_features_nc_metrics_layer{}.jpg".format(self.context["vis_dir"], layer_idx+1))
+            plt.clf()
+
+            # plot non-log values for trace_S_W_div_S_B to compare with adaptive kernels
+            df_nl = df["trace_S_W_div_S_B"].map(lambda x: np.power(10.0, x))
+            df_nl.plot(grid=True, xlabel="epoch", ylabel="NC1")
+            plt.legend()
+            plt.tight_layout()
+            # count layers from 1 as we use 0 for data/input layer
+            plt.savefig("{}non_log_trace_S_W_div_S_B_layer{}.jpg".format(self.context["vis_dir"], layer_idx+1))
+            plt.clf()
+
+
 
     def compute_emp_nngp_nc1_hat_ratio(self):
         data_nc1_hat = self.data_nc_metrics[PLACEHOLDER_LAYER_ID]["trace_S_W_div_S_B"]
@@ -140,14 +185,15 @@ class MetricTracker():
         self.kernel_probe.compute_emp_ntk_kernel(model=model, training_data=training_data)
 
     def compute_lim_kernels_nc1(self, training_data):
-        lim_kernels_nc1 = {"nngp": [], "ntk": [], "nngp_relu": []}
         L = self.context["L"]
         N = self.context["N"]
+        lim_kernels_nc1 = {"nngp": [], "ntk": [], "nngp_act": []}
         for l in range(L):
             nngp_kernel = self.kernel_probe.nngp_kernels[l]
             ntk_kernel = self.kernel_probe.ntk_kernels[l]
-            nngp_relu_kernel = self.kernel_probe.nngp_relu_kernels[l]
-            for name, K in [("nngp", nngp_kernel), ("ntk", ntk_kernel), ("nngp_relu", nngp_relu_kernel)]:
+            nngp_activation_kernel = self.kernel_probe.nngp_activation_kernels[l]
+            for name, K in [("nngp", nngp_kernel), ("ntk", ntk_kernel), ("nngp_act", nngp_activation_kernel)]:
+                assert torch.allclose(K, K.t())
                 nc1_val = NCProbe.compute_kernel_nc1(
                     K=K, N=N, class_sizes=training_data.class_sizes)
                 nc1_val = torch.log10(nc1_val)
@@ -161,16 +207,16 @@ class MetricTracker():
         df.plot(grid=True, xlabel="layer idx", ylabel="$\log_{10}(Tr(\Sigma_W)/Tr(\Sigma_B))$")
         plt.savefig("{}lim_kernels_nc1.jpg".format(self.context["vis_dir"]))
         plt.clf()
-    
+
     def compute_emp_kernels_nc1(self, training_data):
-        emp_kernels_nc1 = {"nngp": [], "ntk": [], "nngp_relu": []}
+        emp_kernels_nc1 = {"nngp": [], "ntk": [], "nngp_act": []}
         L = self.context["L"]
         N = self.context["N"]
         for l in range(L):
             nngp_kernel = self.kernel_probe.emp_nngp_affine_kernels[l]
-            nngp_relu_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
+            nngp_activation_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
             ntk_kernel = self.kernel_probe.emp_ntk_kernel
-            arr = [("nngp", nngp_kernel), ("nngp_relu", nngp_relu_kernel), ("ntk", ntk_kernel)]
+            arr = [("nngp", nngp_kernel), ("nngp_act", nngp_activation_kernel), ("ntk", ntk_kernel)]
             for name, K in arr:
                 nc1_val = NCProbe.compute_kernel_nc1(
                     K=K, N=N, class_sizes=training_data.class_sizes)
@@ -185,7 +231,7 @@ class MetricTracker():
         fig,ax = plt.subplots()
         ax.set_ylabel("$\log_{10}(Tr(\Sigma_W)/Tr(\Sigma_B))$")
         ax.set_xlabel("layer idx")
-        df.plot.line(ax=ax, grid=True, y=["nngp", "nngp_relu"])
+        df.plot.line(ax=ax, grid=True, y=["nngp", "nngp_act"])
         df.plot.line(ax=ax, grid=True, y=["ntk"], linestyle='-.')
         plt.savefig("{}emp_kernels_nc1.jpg".format(self.context["vis_dir"]))
         plt.clf()
@@ -199,7 +245,19 @@ class MetricTracker():
             nngp_kernel = self.kernel_probe.nngp_kernels[l]
             plt.imshow(nngp_kernel.cpu(), cmap='viridis')
             plt.colorbar()
-            plt.savefig("{}lim_nngp_layer{}.jpg".format(self.context["vis_dir"], l))
+            plt.savefig("{}lim_nngp_layer{}.jpg".format(self.context["vis_dir"], l+1))
+            plt.clf()
+
+    def plot_lim_nngp_activation_kernels(self):
+        """
+        Plot the kernels of the lim nngp post-activations
+        """
+        L = self.context["L"]
+        for l in range(L):
+            nngp_activation_kernel = self.kernel_probe.nngp_activation_kernels[l]
+            plt.imshow(nngp_activation_kernel.cpu(), cmap='viridis')
+            plt.colorbar()
+            plt.savefig("{}lim_nngp_activation_layer{}.jpg".format(self.context["vis_dir"], l+1))
             plt.clf()
 
     def plot_lim_ntk_kernels(self):
@@ -211,7 +269,7 @@ class MetricTracker():
             ntk_kernel = self.kernel_probe.ntk_kernels[l]
             plt.imshow(ntk_kernel.cpu(), cmap='viridis')
             plt.colorbar()
-            plt.savefig("{}lim_ntk_layer{}.jpg".format(self.context["vis_dir"], l))
+            plt.savefig("{}lim_ntk_layer{}.jpg".format(self.context["vis_dir"], l+1))
             plt.clf()
 
     # def plot_lim_kernels_circle2d(self, training_data):
@@ -252,7 +310,7 @@ class MetricTracker():
             plt.ylabel("$\log_{10}(\lambda_k)$")
             plt.grid()
             plt.legend()
-            plt.savefig("{}{}".format(self.context["vis_dir"], "lim_kernel_spectrums_layer{}".format(l)))
+            plt.savefig("{}{}".format(self.context["vis_dir"], "lim_kernel_spectrums_layer{}".format(l+1)))
             plt.clf()
 
     def plot_emp_nngp_kernels(self):
@@ -261,12 +319,12 @@ class MetricTracker():
             emp_nngp_affine_kernel = self.kernel_probe.emp_nngp_affine_kernels[l]
             plt.imshow(emp_nngp_affine_kernel.cpu(), cmap='viridis')
             plt.colorbar()
-            plt.savefig("{}emp_nngp_affine_kernel_layer{}.jpg".format(self.context["vis_dir"], l))
+            plt.savefig("{}emp_nngp_affine_kernel_layer{}.jpg".format(self.context["vis_dir"], l+1))
             plt.clf()
             emp_nngp_activation_kernel = self.kernel_probe.emp_nngp_activation_kernels[l]
             plt.imshow(emp_nngp_activation_kernel.cpu(), cmap='viridis')
             plt.colorbar()
-            plt.savefig("{}emp_nngp_activation_kernel_layer{}.jpg".format(self.context["vis_dir"], l))
+            plt.savefig("{}emp_nngp_activation_kernel_layer{}.jpg".format(self.context["vis_dir"], l+1))
             plt.clf()
 
     def plot_emp_ntk_kernel(self):
@@ -320,7 +378,7 @@ class MetricTracker():
             plt.ylabel("$\log_{10}(\lambda_k)$")
             plt.grid()
             plt.legend()
-            plt.savefig("{}{}".format(self.context["vis_dir"], "emp_nngp_kernel_spectrums_layer{}".format(l)))
+            plt.savefig("{}{}".format(self.context["vis_dir"], "emp_nngp_kernel_spectrums_layer{}".format(l+1)))
             plt.clf()
         emp_ntk_kernel = self.kernel_probe.emp_ntk_kernel
         S = torch.linalg.svdvals(emp_ntk_kernel)

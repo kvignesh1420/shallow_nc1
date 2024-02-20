@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch_scatter import scatter
 
 PLACEHOLDER_LAYER_ID = -1
-EPSILON = 1e-6
+EPSILON = 1e-10
 
 class NCProbe():
     """
@@ -169,17 +169,17 @@ class NCProbe():
         device = self.context["device"]
         self.class_sizes = training_data.class_sizes
         # one-pass to compute class means
-        for data, labels in training_data.train_loader:
+        for data, y, labels in training_data.train_loader:
             model.zero_grad()
-            data, labels = data.to(device), labels.to(device)
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             _ = model(data)
             features = model.activation_features if layer_type == "activation" else model.affine_features
             self._track_sums(features=features, labels=labels.type(torch.int64))
         self._compute_means()
         # second-pass to compute covariance matrices
-        for data, labels in training_data.train_loader:
+        for data, y, labels in training_data.train_loader:
             model.zero_grad()
-            data, labels = data.to(device), labels.to(device)
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             _ = model(data)
             features = model.activation_features if layer_type == "activation" else model.affine_features
             self._track_cov(features=features, labels=labels.type(torch.int64))
@@ -206,14 +206,14 @@ class DataNCProbe(NCProbe):
         device = self.context["device"]
         self.class_sizes = training_data.class_sizes
         # one-pass to compute class means
-        for data, labels in training_data.train_loader:
-            data, labels = data.to(device), labels.to(device)
+        for data, y, labels in training_data.train_loader:
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             features = {PLACEHOLDER_LAYER_ID : data}
             self._track_sums(features=features, labels=labels.type(torch.int64))
         self._compute_means()
         # second-pass to compute covariance matrices
-        for data, labels in training_data.train_loader:
-            data, labels = data.to(device), labels.to(device)
+        for data, y, labels in training_data.train_loader:
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             features = {PLACEHOLDER_LAYER_ID : data}
             self._track_cov(features=features, labels=labels.type(torch.int64))
         self._compute_cov()
@@ -244,8 +244,8 @@ class NTKNCProbe(NCProbe):
         self.class_sizes = training_data.class_sizes
         # one-pass to compute class means
         ntk_feat_matrix = torch.zeros(0).to(device)
-        for data, labels in training_data.train_loader:
-            data, labels = data.to(device), labels.to(device)
+        for data, y, labels in training_data.train_loader:
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             assert data.shape[0] == self.context["batch_size"]
             for x_idx in range(data.shape[0]):
                 model_copy.zero_grad()
@@ -262,8 +262,8 @@ class NTKNCProbe(NCProbe):
 
         # second-pass to compute covariance matrices
         ntk_feat_matrix = torch.zeros(0).to(device)
-        for data, labels in training_data.train_loader:
-            data, labels = data.to(device), labels.to(device)
+        for data, y, labels in training_data.train_loader:
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             assert data.shape[0] == self.context["batch_size"]
             for x_idx in range(data.shape[0]):
                 model_copy.zero_grad()
@@ -283,19 +283,31 @@ class KernelProbe():
     def __init__(self, context) -> None:
         self.context = context
 
-    def _nngp_relu_kernel_helper_old(self, nngp_kernel):
-        N = self.context["N"]
-        nngp_relu_kernel = torch.zeros_like(nngp_kernel)
-        for i in range(N):
-            for j in range(N):
-                K_ii = nngp_kernel[i, i]
-                K_ij = nngp_kernel[i, j]
-                K_jj = nngp_kernel[j, j]
-                ratio = K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6)
-                theta = torch.arccos(torch.clip(ratio, min=-1, max=1))
-                val = (torch.sqrt(K_ii*K_jj)*( torch.sin(theta) + (torch.pi - theta)*torch.cos(theta) )) /(2*torch.pi)
-                nngp_relu_kernel[i,j] = val
-        return nngp_relu_kernel
+    def _nngp_erf_kernel_helper(self, nngp_kernel):
+        diag_vals = torch.diag(nngp_kernel, 0)
+        diag_vals_inv_sqrt = torch.sqrt(1.0/(1 + 2*diag_vals))
+        diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
+        ratios = diag_matrix_inv_sqrt @ (2.0*nngp_kernel) @ diag_matrix_inv_sqrt
+
+        thetas = torch.arcsin(torch.clip(ratios, min=-1, max=1))
+        nngp_erf_kernel = (2/torch.pi) * thetas
+        return nngp_erf_kernel
+
+    def _nngp_erf_derivative_kernel_helper(self, nngp_kernel):
+
+        # (4/pi)*det(I_2 + 2K)^{-1/2}
+        # K = [[K_11, K_12], [K_21, K_22]]
+        # I_2 + 2K = [[1 + 2*K_11, K_12], [K_21, 1+2*K_22]]
+        # det(I_2 + 2K)^{-1/2} = ((1+2*K_11)(1+2*K_22) - K_12 K_21)^{-1/2}
+
+        diag_vals = torch.diag(nngp_kernel, 0)
+        scaled_diag_vals = 1 + 2*diag_vals
+        # scaled_diag_matrix = torch.diag(scaled_diag_vals)
+        M = scaled_diag_vals @ scaled_diag_vals.t() - nngp_kernel * nngp_kernel.t()
+        nngp_erf_derivative_kernel = (4/torch.pi)*torch.pow(M, -1/2)
+        assert not torch.isnan(nngp_erf_derivative_kernel).any()
+        assert torch.allclose(nngp_erf_derivative_kernel,nngp_erf_derivative_kernel.t())
+        return nngp_erf_derivative_kernel
 
     def _nngp_relu_kernel_helper(self, nngp_kernel):
         nngp_relu_kernel = torch.zeros_like(nngp_kernel)
@@ -309,21 +321,8 @@ class KernelProbe():
 
         thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
         nngp_relu_kernel = diag_matrix_sqrt @ (( torch.sin(thetas) + (torch.pi - thetas)*torch.cos(thetas) )/(2*torch.pi)) @ diag_matrix_sqrt
+        assert torch.allclose(nngp_relu_kernel, nngp_relu_kernel.t())
         return nngp_relu_kernel
-
-    def _nngp_relu_derivative_kernel_helper_old(self, nngp_kernel):
-        N = self.context["N"]
-        nngp_relu_derivative_kernel = torch.zeros_like(nngp_kernel)
-        for i in range(N):
-            for j in range(N):
-                K_ii = nngp_kernel[i, i]
-                K_ij = nngp_kernel[i, j]
-                K_jj = nngp_kernel[j, j]
-                ratio = K_ij/(torch.sqrt(K_ii*K_jj) + 1e-6)
-                theta = torch.arccos(torch.clip(ratio, min=-1, max=1))
-                val = (torch.pi - theta) /(2*torch.pi)
-                nngp_relu_derivative_kernel[i,j] = val
-        return nngp_relu_derivative_kernel
 
     def _nngp_relu_derivative_kernel_helper(self, nngp_kernel):
         nngp_relu_derivative_kernel = torch.zeros_like(nngp_kernel)
@@ -333,7 +332,20 @@ class KernelProbe():
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
         thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
         nngp_relu_derivative_kernel = (torch.pi - thetas) /(2*torch.pi)
+        assert torch.allclose(nngp_relu_derivative_kernel, nngp_relu_derivative_kernel.t())
         return nngp_relu_derivative_kernel
+
+    def _nngp_activation_kernel_helper(self, nngp_kernel):
+        if self.context["activation"] == "relu":
+            return self._nngp_relu_kernel_helper(nngp_kernel=nngp_kernel)
+        elif self.context["activation"] == "erf":
+            return self._nngp_erf_kernel_helper(nngp_kernel=nngp_kernel)
+
+    def _nngp_activation_derivative_kernel_helper(self, nngp_kernel):
+        if self.context["activation"] == "relu":
+            return self._nngp_relu_derivative_kernel_helper(nngp_kernel=nngp_kernel)
+        elif self.context["activation"] == "erf":
+            return self._nngp_erf_derivative_kernel_helper(nngp_kernel=nngp_kernel)
 
     def compute_lim_nngp_kernels(self, training_data):
         """
@@ -344,46 +356,42 @@ class KernelProbe():
 
         The recursive formulation is adapted from: https://arxiv.org/pdf/1711.00165.pdf
         """
-        sigma_w_sq = 2
-        sigma_b_sq = 1
+        sigma_w_sq = self.context["hidden_weight_std"]**2
+        sigma_b_sq = self.context["bias_std"]**2
         L = self.context["L"]
         X = training_data.X[training_data.perm_inv].to(self.context["device"])
         self.nngp_kernels = {}
-        self.nngp_relu_kernels = {}
+        self.nngp_activation_kernels = {}
         # base case
         self.nngp_kernels[0] = sigma_b_sq + (sigma_w_sq/self.context["in_features"])*(X @ X.t())
-        self.nngp_relu_kernels[0] = self._nngp_relu_kernel_helper(nngp_kernel=self.nngp_kernels[0])
+        self.nngp_activation_kernels[0] = self._nngp_activation_kernel_helper(nngp_kernel=self.nngp_kernels[0])
         # Recursive formulation for subsequent layers.
-        # note that we include the final layer as well
+        # note that we include the final layer as well.
+        # The last layes doesn't contain activations but we calculate for analysis purposes.
         for l in range(1, L):
-            self.nngp_kernels[l] = sigma_b_sq + sigma_w_sq*self.nngp_relu_kernels[l-1]
-            self.nngp_relu_kernels[l] = self._nngp_relu_kernel_helper(nngp_kernel=self.nngp_kernels[l])
+            self.nngp_kernels[l] = sigma_b_sq + sigma_w_sq*self.nngp_activation_kernels[l-1]
+            self.nngp_activation_kernels[l] = self._nngp_activation_kernel_helper(nngp_kernel=self.nngp_kernels[l])
 
     def compute_lim_ntk_kernels(self, training_data):
-        """
-        We use kaiming_normal init for weights and
-        standard normal init for bias with:
-        \sigma_w^2 = 2,
-        \sigma_b^2 = 1.
-        """
         if not hasattr(self, "nngp_kernels"):
             logger.warning("lim NNGP kernels have not been computed. \
                            Computing them before proceeding.")
             self.compute_lim_nngp_kernels(training_data=training_data)
         L = self.context["L"]
         self.ntk_kernels = {}
-        self.nngp_relu_derivative_kernels = {}
+        self.nngp_activation_derivative_kernels = {}
         # base case
         self.ntk_kernels[0] = self.nngp_kernels[0]
-        self.nngp_relu_derivative_kernels[0] = self._nngp_relu_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[0])
+        self.nngp_activation_derivative_kernels[0] = self._nngp_activation_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[0])
         # Recursive formulation for subsequent layers.
-        # note that we include the final layer as well
         for l in range(1, L):
-            self.ntk_kernels[l] = self.nngp_kernels[l] + self.ntk_kernels[l-1] * self.nngp_relu_derivative_kernels[l-1]
-            self.nngp_relu_derivative_kernels[l] = self._nngp_relu_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[l])
+            self.ntk_kernels[l] = self.nngp_kernels[l] + self.ntk_kernels[l-1] * self.nngp_activation_derivative_kernels[l-1]
+            self.nngp_activation_derivative_kernels[l] = self._nngp_activation_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[l])
 
     def compute_emp_nngp_kernels(self, model, training_data):
+        # the usual nngp
         self.emp_nngp_affine_kernels = OrderedDict()
+        # the post-activation nngp
         self.emp_nngp_activation_kernels = OrderedDict()
         model.zero_grad()
         X = training_data.X[training_data.perm_inv].to(self.context["device"])
@@ -416,8 +424,8 @@ class KernelProbe():
         device = self.context["device"]
         model_copy = copy.deepcopy(model)
         ntk_feat_matrix = torch.zeros(0).to(device)
-        for data, labels in training_data.train_loader:
-            data, labels = data.to(device), labels.to(device)
+        for data, y, labels in training_data.train_loader:
+            data, y, labels = data.to(device), y.to(device), labels.to(device)
             assert data.shape[0] == self.context["batch_size"]
             for x_idx in range(data.shape[0]):
                 model_copy.zero_grad()

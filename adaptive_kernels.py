@@ -6,10 +6,6 @@ Paper: https://www.nature.com/articles/s41467-023-36361-y
 
 from collections import OrderedDict
 from functools import partial
-import sys
-import os
-import json
-import hashlib
 import logging
 
 import scipy
@@ -27,15 +23,10 @@ config.update("jax_enable_x64", True)
 # key = random.PRNGKey(0)
 # x = random.normal(key, (10,))
 
-from shallow_collapse.data import GaussiandD
-from shallow_collapse.data import Gaussian2D
 from shallow_collapse.probes import NCProbe
+from shallow_collapse.utils import setup_runtime_context
+from shallow_collapse.utils import data_cls_map
 
-
-data_cls_map = {
-    "GaussiandD": GaussiandD,
-    "Gaussian2D": Gaussian2D
-}
 
 @jit
 def getQ1_(Sigma, x, y, siga2): # Post-activation kernel of the hidden layer
@@ -121,9 +112,10 @@ class EoSTracker:
     def plot_Q1_nc1(self):
         steps = list(self.step_Q1_nc1.keys())
         values = list(self.step_Q1_nc1.values())
-        plt.plot(steps, values)
+        plt.plot(steps, values,  label="trace_S_W_div_S_B")
+        plt.legend()
         plt.xlabel("step")
-        plt.ylabel("NC1 ($\log10$)")
+        plt.ylabel("NC1")
         plt.grid(True)
         plt.tight_layout()
         plt.savefig("{}Q1_nc1.jpg".format(self.context["vis_dir"]))
@@ -132,9 +124,10 @@ class EoSTracker:
     def plot_fbar_kernel_nc1(self):
         steps = list(self.step_fbar_nc1.keys())
         values = list(self.step_fbar_nc1.values())
-        plt.plot(steps, values)
+        plt.plot(steps, values, label="trace_S_W_div_S_B")
+        plt.legend()
         plt.xlabel("step")
-        plt.ylabel("NC1 ($\log10$)")
+        plt.ylabel("NC1")
         plt.grid(True)
         plt.tight_layout()
         plt.savefig("{}fbar_nc1.jpg".format(self.context["vis_dir"]))
@@ -282,54 +275,21 @@ class EoSSolver:
 
 
 
-def prepare_config_hash(context):
-    _string_context = json.dumps(context, sort_keys=True).encode("utf-8")
-    parsed_context_hash = hashlib.md5(_string_context).hexdigest()
-    return parsed_context_hash
-
-def setup_runtime_context(context):
-    # create a unique hash for the model
-    if context["training_data_cls"] not in data_cls_map:
-        sys.exit("Invalid training_data_cls. Choose from {}".format(list(data_cls_map.keys())))
-    config_uuid = prepare_config_hash(context=context)
-    context["config_uuid"] = config_uuid
-    context["device"] = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    context["out_dir"] = "out/"
-    vis_dir = context["out_dir"] + context["config_uuid"] + "/plots/"
-    results_dir = context["out_dir"] + context["config_uuid"] + "/results/"
-    results_file = results_dir + "run.txt"
-    if not os.path.exists(vis_dir):
-        print("Vis folder does not exist. Creating {}".format(vis_dir))
-        os.makedirs(vis_dir)
-    else:
-        print("Vis folder {} already exists!".format(vis_dir))
-    if not os.path.exists(results_dir):
-        print("Resuls folder does not exist. Creating {}".format(results_dir))
-        os.makedirs(results_dir)
-    else:
-        print("Resuls folder {} already exists!".format(results_dir))
-    context["vis_dir"] = vis_dir
-    context["results_file"] = results_file
-
-    return context
-
-
-
 if __name__ == "__main__":
     exp_context = {
         "name": "adaptive_kernels",
-        "training_data_cls": "Gaussian2D",
+        "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-1, 1],
+        "class_means": [-2, 2],
         "class_stds": [0.3, 0.3],
         "class_sizes": [512, 512],
         "in_features": 1,
         "num_classes": 2,
         "N": 1024,
         "batch_size": 1024,
-        "h": 512,
-        "sigw2": 1./2,
-        "siga2": 1./2, 
+        "h": 1024,
+        "sigw2": 1,
+        "siga2": 1, 
         "sig2": 0.001,
     }
     context = setup_runtime_context(context=exp_context)
@@ -340,6 +300,7 @@ if __name__ == "__main__":
         level=logging.INFO
     )
     logging.info("context: \n{}".format(context))
+
     training_data = data_cls_map[context["training_data_cls"]](context=context)
     solver = EoSSolver(context=context)
     solver.solve(training_data=training_data)

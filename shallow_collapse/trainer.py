@@ -28,18 +28,20 @@ class Trainer():
         if self.context["probe_features"]:
             self.tracker.store_affine_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
             self.tracker.store_activation_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
-        if self.context["probe_kernels"] and self.context["activation"] == "relu" and epoch == 0:
+        if self.context["probe_kernels"] and epoch == 0:
             self.tracker.store_lim_kernels(training_data=training_data)
             self.tracker.compute_lim_kernels_nc1(training_data=training_data)
-        if self.context["probe_kernels"] and self.context["activation"] == "relu" and epoch == self.context["num_epochs"]:
-            self.tracker.store_emp_kernels(model=model, training_data=training_data)
-            self.tracker.compute_emp_kernels_nc1(training_data=training_data)
+        # if self.context["probe_kernels"] and epoch == self.context["num_epochs"]:
+            # self.tracker.store_emp_kernels(model=model, training_data=training_data)
+            # self.tracker.compute_emp_kernels_nc1(training_data=training_data)
 
     def plot_pred(self, model, training_data):
         if self.context["out_features"] == 1:
             pred=model(training_data.X)
             pred = pred[training_data.perm_inv].detach().cpu().numpy()
             plt.plot(pred)
+            plt.grid(True)
+            plt.tight_layout()
             plt.savefig("{}pred.jpg".format(self.context["vis_dir"]))
             plt.clf()
 
@@ -49,17 +51,17 @@ class Trainer():
         if self.context["probe_features"]:
             self.tracker.plot_affine_features_nc_metrics()
             self.tracker.plot_activation_features_nc_metrics()
-        # plot only for relu as of now.
-        if self.context["probe_kernels"] and self.context["activation"] == "relu":
+        if self.context["probe_kernels"]:
             self.tracker.plot_lim_kernels_nc1()
             self.tracker.plot_lim_nngp_kernels()
+            self.tracker.plot_lim_nngp_activation_kernels()
             self.tracker.plot_lim_ntk_kernels()
             self.tracker.plot_lim_kernel_spectrums()
             # self.tracker.plot_lim_kernels_circle2d(training_data=training_data)
-            self.tracker.plot_emp_kernels_nc1()
-            self.tracker.plot_emp_nngp_kernels()
-            self.tracker.plot_emp_ntk_kernel()
-            self.tracker.plot_emp_kernel_spectrums()
+            # self.tracker.plot_emp_kernels_nc1()
+            # self.tracker.plot_emp_nngp_kernels()
+            # self.tracker.plot_emp_ntk_kernel()
+            # self.tracker.plot_emp_kernel_spectrums()
             # self.tracker.plot_emp_kernels_circule2d(training_data=training_data)
 
     def train(self, model, training_data):
@@ -80,16 +82,16 @@ class Trainer():
         self.apply_tracker(model=model, training_data=training_data, loss=None, epoch=0)
         # loop from 1 as epoch=0 indicates init
         for epoch in tqdm(range(1, num_epochs+1)):
-            for data, labels in training_data.train_loader:
+            for data, y, labels in training_data.train_loader:
                 model.zero_grad()
-                data, labels = data.to(device), labels.to(device)
+                data, y, labels = data.to(device), y.to(device), labels.to(device)
                 if self.context["out_features"] > 1:
-                    labels = F.one_hot(labels.type(torch.int64), num_classes=self.context["num_classes"])
-                    labels = labels.type(torch.float)
+                    y = F.one_hot(y.type(torch.int64), num_classes=self.context["num_classes"])
+                    y = y.type(torch.float)
                 else:
-                    labels = labels.unsqueeze(1)
+                    y = y.unsqueeze(1)
                 pred = model(data)
-                loss = loss_criterion(pred, labels)
+                loss = loss_criterion(pred, y)
                 loss.backward()
                 optimizer.step()
             if epoch%self.context["probing_frequency"] == 0:

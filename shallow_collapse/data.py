@@ -1,3 +1,4 @@
+import os
 import logging
 logger = logging.getLogger(__name__)
 import torch
@@ -8,16 +9,17 @@ from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 
 class _SyntheticDataset(Dataset):
-    def __init__(self, X, labels) -> None:
+    def __init__(self, X, y, labels) -> None:
         super().__init__()
         self.X = X
+        self.y = y
         self.labels = labels
 
     def __len__(self):
         return self.X.shape[0]
 
     def __getitem__(self, index):
-        return self.X[index], self.labels[index]
+        return self.X[index], self.y[index], self.labels[index]
 
 class GaussiandD():
     """
@@ -32,17 +34,24 @@ class GaussiandD():
 
     def prepare_data(self):
         """
-        Prepare data matrices (X, Y) for training
+        Prepare data matrices X, y, labels and perm for training
         """
-        device = self.context["device"]
-        N = self.context["N"]
-        # X = torch.randn(size=(N, 1), requires_grad=False)
+        self.device = self.context["device"]
+        self.N = self.context["N"]
         self.d = self.context["in_features"]
         self.class_sizes = torch.Tensor(self.context["class_sizes"]).type(torch.int)
-        assert N == self.class_sizes.sum()
+        assert self.N == self.class_sizes.sum()
+        # try loading saved data
+        load_success = self.load_state()
+        if not load_success: self._prepare_fresh_data()
+        self.prepare_data_loader()
 
+    def _prepare_fresh_data(self):
+        """Helper function to create fresh data"""
+        print("preparing fresh data.")
         num_classes = self.class_sizes.shape[0]
         X = []
+        y = []
         labels = []
         for c in range(num_classes):
             class_mean = self.context["class_means"][c]
@@ -57,21 +66,55 @@ class GaussiandD():
                 requires_grad=False
             )
             X.append(X_c)
+            y_c = torch.ones(class_size)*c
+            y.append(y_c)
             labels_c = torch.ones(class_size)*c
             labels.append(labels_c)
 
         X = torch.concat(X)
+        y = torch.cat(y)
         labels = torch.cat(labels)
-        self.perm = torch.randperm(n=N)
-        self.perm_inv = torch.argsort(self.perm).to(device)
-        self.X = X[self.perm].to(device)
-        self.labels = labels[self.perm].to(device)
-        self.prepare_data_loader()
+
+        self.perm = torch.randperm(n=self.N)
+        self.perm_inv = torch.argsort(self.perm).to(self.device)
+        self.X = X[self.perm].to(self.device)
+        self.y = y[self.perm].to(self.device)
+        self.labels = labels[self.perm].to(self.device)
+        self.save_state()
+
 
     def prepare_data_loader(self):
-        train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
+        train_dataset = _SyntheticDataset(X=self.X, y=self.y, labels=self.labels)
         train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
         self.train_loader = DataLoader(train_dataset, **train_kwargs)
+
+    def load_state(self):
+        print("loading/regenerating X, y, labels and perm from {}".format(self.context["data_dir"]))
+        names = ["X.pt", "y.pt", "labels.pt", "perm.pt", "perm_inv.pt"]
+        for name in names:
+            filepath = os.path.join(self.context["data_dir"], name)
+            if not os.path.exists(filepath):
+                error = "Attempting to load {} , which doesn't exist. Data will be regenerated.".format(filepath)
+                logger.warning(error)
+                return False
+
+        self.X = torch.load(os.path.join(self.context["data_dir"], "X.pt"))
+        self.y = torch.load(os.path.join(self.context["data_dir"], "y.pt"))
+        self.labels = torch.load(os.path.join(self.context["data_dir"], "labels.pt"))
+        self.perm = torch.load(os.path.join(self.context["data_dir"], "perm.pt"))
+        self.perm_inv = torch.load(os.path.join(self.context["data_dir"], "perm_inv.pt"))
+        print("Load sucessful.")
+        return True
+
+
+    def save_state(self):
+        print("saving X, y, labels, perm and perm_inv to {}".format(self.context["data_dir"]))
+        torch.save(self.X,  os.path.join(self.context["data_dir"], "X.pt"))
+        torch.save(self.y,  os.path.join(self.context["data_dir"], "y.pt"))
+        torch.save(self.labels,  os.path.join(self.context["data_dir"], "labels.pt"))
+        torch.save(self.perm,  os.path.join(self.context["data_dir"], "perm.pt"))
+        torch.save(self.perm_inv,  os.path.join(self.context["data_dir"], "perm_inv.pt"))
+
 
     def plot(self):
         """
@@ -99,35 +142,30 @@ class GaussiandD():
         plt.savefig("{}gaussiandD_data.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
-class Gaussian2D(GaussiandD):
+class Gaussian2DNL(GaussiandD):
     def __init__(self, context) -> None:
         super().__init__(context=context)
         assert context["num_classes"] == 2
 
-    def prepare_data(self):
+    def _prepare_fresh_data(self):
         """
-        Prepare data matrices (X, Y) for training
+        Modify the logic to create labels +-1 instead of 0,1.
         """
-        device = self.context["device"]
-        N = self.context["N"]
-        # X = torch.randn(size=(N, 1), requires_grad=False)
-        self.d = self.context["in_features"]
-        self.class_sizes = torch.Tensor(self.context["class_sizes"]).type(torch.int)
-        assert N == self.class_sizes.sum()
-
+        print("preparing fresh data.")
         class_means = self.context["class_means"]
         class_stds = self.context["class_stds"]
         class_sizes = self.context["class_sizes"]
         logger.info("creating data for classes -1, 1 with mean: {} std: {} and size: {}".format(
             class_means, class_stds, class_sizes))
-    
+
         X1 = torch.normal(
             mean=torch.tensor(class_means[0]),
             std=torch.tensor(class_stds[0]),
             size=(class_sizes[0], self.d),
             requires_grad=False
         )
-        labels_1 = -torch.ones(class_sizes[0])
+        y_1 = -torch.ones(class_sizes[0])
+        labels_1 = torch.ones(class_sizes[0])*0
 
         X2 = torch.normal(
             mean=torch.tensor(class_means[1]),
@@ -135,66 +173,19 @@ class Gaussian2D(GaussiandD):
             size=(class_sizes[1], self.d),
             requires_grad=False
         )
-        labels_2 = torch.ones(class_sizes[1])
+        y_2 = torch.ones(class_sizes[1])
+        labels_2 = torch.ones(class_sizes[1])*1
 
         X = torch.concat([X1, X2])
+        y = torch.cat([y_1, y_2])
         labels = torch.cat([labels_1, labels_2])
-        self.perm = torch.randperm(n=N)
-        self.perm_inv = torch.argsort(self.perm).to(device)
-        self.X = X[self.perm].to(device)
-        self.labels = labels[self.perm].to(device)
-        self.prepare_data_loader()
 
-
-# class Circle2D():
-#     """
-#     Linearly separable 2D circular data
-#     Args:
-#         context: Dictionary of model training parameters
-#     """
-#     def __init__(self, context) -> None:
-#         self.context = context
-#         self.prepare_data()
-#         self.plot()
-
-#     def prepare_data(self):
-#         """
-#         Prepare data matrices (X, Y) for training
-#         """
-#         device = self.context["device"]
-#         N = self.context["N"]
-#         # X = torch.randn(size=(N, 1), requires_grad=False)
-#         theta_eps = 1e-2
-#         theta1s = torch.linspace(-torch.pi + theta_eps, 0 - theta_eps, N//2)
-#         theta2s = torch.linspace(0 + theta_eps, torch.pi - theta_eps, N//2)
-#         thetas = torch.cat([theta1s, theta2s])
-#         X1 = torch.cat([torch.cos(theta1s).unsqueeze(1), torch.sin(theta1s).unsqueeze(1)], 1)
-#         X2 = torch.cat([torch.cos(theta2s).unsqueeze(1), torch.sin(theta2s).unsqueeze(1)], 1)
-#         X = torch.cat([X1, X2])
-#         labels = torch.cat([torch.zeros(N//2), torch.ones(N//2)])
-#         self.perm = torch.randperm(n=N)
-#         self.perm_inv = torch.argsort(self.perm).to(device)
-#         self.X = X[self.perm].to(device)
-#         self.labels = labels[self.perm].to(device)
-#         self.thetas = thetas[self.perm]
-#         self.class_sizes = torch.Tensor([N//2, N//2]).type(torch.int)
-#         self.prepare_data_loader()
-
-#     def prepare_data_loader(self):
-#         train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
-#         train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
-#         self.train_loader = DataLoader(train_dataset, **train_kwargs)
-
-#     def plot(self):
-#         N = self.context["N"]
-#         points = self.X[self.perm_inv].cpu().detach().numpy()
-#         plt.plot(points[:N//2,0], points[:N//2,1], color="orange")
-#         plt.plot(points[N//2:,0], points[N//2:,1], color="blue")
-#         plt.xlabel("x-axis")
-#         plt.ylabel("y-axis")
-#         plt.grid()
-#         plt.savefig("{}circle2d_data.jpg".format(self.context["vis_dir"]))
-#         plt.clf()
+        self.perm = torch.randperm(n=self.N)
+        self.perm_inv = torch.argsort(self.perm).to(self.device)
+        self.X = X[self.perm].to(self.device)
+        self.y = y[self.perm].to(self.device)
+        self.labels = labels[self.perm].to(self.device)
+        self.save_state()
 
 
 class MNIST2Class():
@@ -231,11 +222,12 @@ class MNIST2Class():
         self.perm = torch.randperm(n=N)
         self.perm_inv = torch.argsort(self.perm).to(device)
         self.X = X[self.perm].to(device)
+        self.y = labels[self.perm].to(device)
         self.labels = labels[self.perm].to(device)
         self.prepare_data_loader()
 
     def prepare_data_loader(self):
-        train_dataset = _SyntheticDataset(X=self.X, labels=self.labels)
+        train_dataset = _SyntheticDataset(X=self.X, y=self.y, labels=self.labels)
         train_kwargs = {"batch_size": self.context["batch_size"], "shuffle": False}
         self.train_loader = DataLoader(train_dataset, **train_kwargs)
         self.num_classes = self.context["num_classes"]
