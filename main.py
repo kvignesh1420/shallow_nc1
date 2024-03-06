@@ -13,13 +13,13 @@ def main():
         "training_data_cls": "Gaussian2DNL",
         "N": 1024,
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [0, 0],
-        "class_stds": [4, 4],
+        "class_means": [-2, 2],
+        "class_stds": [0.3, 0.3],
         "class_sizes": [512, 512],
         "batch_size": 1024,
         "num_epochs": 10000,
         "L": 2,
-        "in_features": 32,
+        "in_features": 1,
         "hidden_features": 1024,
         "out_features": 1,
         "num_classes" : 2,
@@ -33,6 +33,7 @@ def main():
         "activation": "erf",
         "probe_features": True,
         "probe_kernels": True,
+        "probe_weights": True,
         "probing_frequency": 1000
     }
     context = setup_runtime_context(context=exp_context)

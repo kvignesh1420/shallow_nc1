@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from shallow_collapse.probes import WeightProbe
 from shallow_collapse.probes import NCProbe
 from shallow_collapse.probes import DataNCProbe
 from shallow_collapse.probes import NTKNCProbe
@@ -20,6 +21,7 @@ class MetricTracker():
     """
     def __init__(self, context: Dict[str, Any]) -> None:
         self.context = context
+        self.epoch_weight_cov_traces = OrderedDict()
         self.epoch_ntk_features_nc_metrics = OrderedDict()
         self.epoch_affine_features_nc_metrics = OrderedDict()
         self.epoch_activation_features_nc_metrics = OrderedDict()
@@ -28,11 +30,32 @@ class MetricTracker():
         self.initialize_probes()
 
     def initialize_probes(self):
+        self.weight_probe = WeightProbe(context=self.context)
         self.kernel_probe = KernelProbe(context=self.context)
         self.data_nc_probe = DataNCProbe(context=self.context)
         self.ntk_features_nc_probe = NTKNCProbe(context=self.context)
         self.affine_features_nc_probe = NCProbe(context=self.context)
         self.activation_features_nc_probe = NCProbe(context=self.context)
+
+    def store_weight_cov_traces(self, model, epoch):
+        weight_cov_traces = self.weight_probe.capture(model=model)
+        self.epoch_weight_cov_traces[epoch] = weight_cov_traces
+        weight_cov_traces_df = pd.DataFrame.from_dict(weight_cov_traces)
+        logger.debug("\n traces of layer-wise weights at epoch {}:\n{}".format(epoch, weight_cov_traces_df))
+
+    def plot_weight_cov_traces(self):
+        epochs = list(self.epoch_weight_cov_traces.keys())
+        for layer_idx in range(self.context["L"]):
+            values = []
+            for epoch in epochs:
+                value = self.epoch_weight_cov_traces[epoch][layer_idx]
+                values.append(value)
+
+            df = pd.DataFrame(values, index=epochs).astype(float)
+            df.plot(grid=True, xlabel="epoch", ylabel="$Tr(W@W^T)$")
+            plt.tight_layout()
+            plt.savefig("{}weight_cov_trace_layer{}.jpg".format(self.context["vis_dir"], layer_idx+1))
+            plt.clf()
 
     def store_data_nc_metrics(self, training_data):
         self.data_nc_metrics = self.data_nc_probe.capture(training_data=training_data)

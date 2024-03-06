@@ -1,14 +1,29 @@
 import logging
 logger = logging.getLogger(__name__)
 from collections import OrderedDict
-from typing import Dict, Any, List, Optional
 import copy
 import torch
-import torch.nn.functional as F
 from torch_scatter import scatter
 
 PLACEHOLDER_LAYER_ID = -1
 EPSILON = 1e-10
+
+class WeightProbe():
+    """Probe weight matrix statistics."""
+    def __init__(self, context) -> None:
+        self.context = context
+
+    @torch.no_grad()
+    def capture(self, model):
+        """Capture the trace of covariance of weight matrices"""
+        data = OrderedDict()
+        for idx, layer in enumerate(model.hidden_layers):
+            W = layer.weight.data.clone()
+            S = W @ W.t()
+            trace_val = torch.trace(S)
+            data[idx] = {}
+            data[idx]["cov_trace"] = trace_val
+        return data
 
 class NCProbe():
     """
@@ -310,11 +325,10 @@ class KernelProbe():
         M = scaled_diag_vals @ scaled_diag_vals.t() - nngp_kernel * nngp_kernel.t()
         nngp_erf_derivative_kernel = (4/torch.pi)*torch.pow(M, -1/2)
         assert not torch.isnan(nngp_erf_derivative_kernel).any()
-        assert torch.allclose(nngp_erf_derivative_kernel,nngp_erf_derivative_kernel.t())
+        torch.testing.assert_allclose(nngp_erf_derivative_kernel,nngp_erf_derivative_kernel.t())
         return nngp_erf_derivative_kernel
 
     def _nngp_relu_kernel_helper(self, nngp_kernel):
-        nngp_relu_kernel = torch.zeros_like(nngp_kernel)
         diag_vals = torch.diag(nngp_kernel, 0)
         diag_vals_sqrt = torch.sqrt(diag_vals)
         diag_matrix_sqrt = torch.diag(diag_vals_sqrt)
@@ -322,11 +336,14 @@ class KernelProbe():
         diag_vals_inv_sqrt = torch.sqrt(1.0/(diag_vals + EPSILON))
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
-        
+        torch.testing.assert_allclose(ratios, ratios.t())
         thetas = torch.arccos(ratios)
+        # handle numerical precision issues with torch.arccos
+        thetas = (thetas + thetas.t())/2
+        torch.testing.assert_allclose(thetas, thetas.t())
         # thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
         nngp_relu_kernel = diag_matrix_sqrt @ (( torch.sin(thetas) + (torch.pi - thetas)*torch.cos(thetas) )/(2*torch.pi)) @ diag_matrix_sqrt
-        assert torch.allclose(nngp_relu_kernel, nngp_relu_kernel.t())
+        torch.testing.assert_allclose(nngp_relu_kernel, nngp_relu_kernel.t())
         return nngp_relu_kernel
 
     def _nngp_relu_derivative_kernel_helper(self, nngp_kernel):
@@ -335,10 +352,14 @@ class KernelProbe():
         diag_vals_inv_sqrt = torch.sqrt(1.0/(diag_vals + EPSILON))
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
+        torch.testing.assert_allclose(ratios, ratios.t())
         thetas = torch.arccos(ratios)
+        # handle numerical precision issues with torch.arccos
+        thetas = (thetas + thetas.t())/2
+        torch.testing.assert_allclose(thetas, thetas.t())
         # thetas = torch.arccos(torch.clip(ratios, min=-1, max=1))
         nngp_relu_derivative_kernel = (torch.pi - thetas) /(2*torch.pi)
-        assert torch.allclose(nngp_relu_derivative_kernel, nngp_relu_derivative_kernel.t())
+        torch.testing.assert_allclose(nngp_relu_derivative_kernel, nngp_relu_derivative_kernel.t())
         return nngp_relu_derivative_kernel
 
     def _nngp_activation_kernel_helper(self, nngp_kernel):

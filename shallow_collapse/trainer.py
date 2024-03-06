@@ -25,6 +25,8 @@ class Trainer():
             loss_value = loss.cpu().detach().numpy()
             logger.debug("epoch: {} loss: {}".format(epoch, loss_value))
             self.tracker.store_loss(loss=loss_value, epoch=epoch)
+        if self.context["probe_weights"]:
+            self.tracker.store_weight_cov_traces(model=model, epoch=epoch)
         if self.context["probe_features"]:
             self.tracker.store_affine_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
             self.tracker.store_activation_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
@@ -47,6 +49,8 @@ class Trainer():
     def plot_results(self, model, training_data):
         self.plot_pred(model=model, training_data=training_data)
         self.tracker.plot_loss()
+        if self.context["probe_weights"]:
+            self.tracker.plot_weight_cov_traces()
         if self.context["probe_features"]:
             self.tracker.plot_affine_features_nc_metrics()
             self.tracker.plot_activation_features_nc_metrics()

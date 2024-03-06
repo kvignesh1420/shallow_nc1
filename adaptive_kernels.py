@@ -69,6 +69,7 @@ class EoSTracker:
     def __init__(self, context):
         self.context = context
         self.N = self.context["N"]
+        self.step_Sigma = OrderedDict()
         self.step_Q1 = OrderedDict()
         self.step_fbar_kernel = OrderedDict()
         self.step_Q1_nc1 = OrderedDict()
@@ -86,6 +87,49 @@ class EoSTracker:
         plt.plot(fbar)
         plt.tight_layout()
         plt.savefig("{}{}.jpg".format(self.context["vis_dir"], name))
+        plt.clf()
+
+    def store_Sigma(self, Sigma, step):
+        self.step_Sigma[step] = Sigma
+    
+    def plot_initial_final_Sigma_esd(self):
+        steps = list(self.step_Sigma.keys())
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_Sigma = self.step_Sigma[initial_step]
+        final_Sigma = self.step_Sigma[final_step]
+        Ui, Si, Vhi = np.linalg.svd(initial_Sigma, full_matrices=False)
+        Uf, Sf, Vhf = np.linalg.svd(final_Sigma, full_matrices=False)
+        plt.hist(Si, bins=100, label="initial")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}initial_Sigma_esd.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+        plt.hist(Sf, bins=100, label="step{}".format(final_step))
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}final_Sigma_esd.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_initial_final_Sigma(self):
+        steps = list(self.step_Sigma.keys())
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_Sigma = self.step_Sigma[initial_step]
+        final_Sigma = self.step_Sigma[final_step]
+        self.plot_kernel(K = initial_Sigma, name="Sigma_step{}".format(initial_step))
+        self.plot_kernel(K = final_Sigma, name="Sigma_step{}".format(final_step))
+        self.plot_kernel(K = final_Sigma - initial_Sigma, name="Sigma_diff")
+
+    def plot_Sigma_trace(self):
+        steps = list(self.step_Sigma.keys())
+        Sigmas = list(self.step_Sigma.values())
+        traces = [np.trace(Sigma) for Sigma in Sigmas]
+        plt.plot(steps, traces)
+        plt.xlabel("steps")
+        plt.ylabel("Tr(Sigma)")
+        plt.tight_layout()
+        plt.savefig("{}Sigma_traces.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
     def compute_and_store_data_kernel_nc1(self, X_train, class_sizes):
@@ -210,7 +254,9 @@ class EoSSolver:
         # fix logic to compute
         t = y_train - fbar
 
-        retVal = Sigma - self.get_new_Sigma(Sigma=Sigma, x_train=x_train, Q1_inert=Q1_inert, t=t, C1=C1, C2=C2)
+        newSigma = self.get_new_Sigma(Sigma=Sigma, x_train=x_train, Q1_inert=Q1_inert, t=t, C1=C1, C2=C2)
+        self.tracker.store_Sigma(Sigma=newSigma, step=self.newton_krylov_steps)
+        retVal = Sigma - newSigma
         retVal2 = Q1 - Q1_inert
 
         self.newton_krylov_steps += 1
@@ -236,6 +282,7 @@ class EoSSolver:
         self.tracker.compute_and_store_data_kernel_nc1(X_train=X_train, class_sizes=training_data.class_sizes)
 
         # start with the NNGP limit solution
+        self.tracker.store_Sigma(Sigma=self.Sigma0, step=0)
         Q1 = getQ1(Sigma=self.Sigma0, x=X_train, y=X_train, sigw2=self.sigw2)
         Q1_np = np.asarray(Q1)
         Q1_torch = torch.from_numpy(Q1_np)
@@ -308,6 +355,9 @@ class EoSSolver:
         fbar_np = np.asarray(fbar)
         fbar_torch = torch.from_numpy(fbar_np).unsqueeze(-1)
         self.tracker.plot_fbar(fbar=fbar_torch, name="fbar_final")
+        self.tracker.plot_initial_final_Sigma()
+        self.tracker.plot_initial_final_Sigma_esd()
+        self.tracker.plot_Sigma_trace()
 
 
 if __name__ == "__main__":
@@ -325,6 +375,7 @@ if __name__ == "__main__":
         "h": 1024,
         "sigw2": 1,
         "sig2": 0.001,
+        # "Cs": [100000]
         "Cs": [100000, 95000, 90000, 85000, 80000, 60000, 40000, 35000, 30000, 28000, 26000, 24000, 20000,15000,10000,8000,7000,6000,5000,4000,3000,2000,1800,1600,1400,1200,1000,900,800,700,650,600,570,530,500,470,430,400,370,350,330,310,290,270,250,230,210,200,190,180,170,160,150,140,130,120,110,100,95,90]
         # "Cs": [1_000_000, 900_000, 800_000, 700_000, 600_000, 500_000, 400_000, 300_000, 200_000, 100_000, 97_000, 95000, 92000, 90000, 87000, 85000, 82000, 80000, 70000, 60000, 50000, 40000, 35000, 30000, 28000, 26000, 24000, 22000, 20000, 15000,10000,8000,7000,6000,5000,4000,3000,2000,1800,1600,1400,1200,1000,900,800,700,650,600,570,530,500,470,430,400,370,350,330,310,290,270,250,230,210,200,190,180,170,160,150,140,130,120,110,100,95,90]
     }
