@@ -19,7 +19,7 @@ def main():
         "batch_size": 1024,
         "num_epochs": 10000,
         "L": 2,
-        "in_features": 1,
+        "in_features": 32,
         "hidden_features": 1024,
         "out_features": 1,
         "num_classes" : 2,
