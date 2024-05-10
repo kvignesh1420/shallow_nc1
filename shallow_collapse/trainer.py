@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 from typing import Dict, Any
+import math
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -28,13 +29,10 @@ class Trainer():
         if self.context["probe_weights"]:
             self.tracker.store_weight_cov_traces(model=model, epoch=epoch)
         if self.context["probe_features"]:
-            self.tracker.store_affine_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
             self.tracker.store_activation_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
         if self.context["probe_kernels"] and epoch == 0:
             self.tracker.store_lim_kernels(training_data=training_data)
             self.tracker.compute_lim_kernels_nc1(training_data=training_data)
-        if self.context["probe_kernels"]:
-            self.tracker.store_emp_kernels(model=model, training_data=training_data, epoch=epoch)
 
     def plot_pred(self, model, training_data):
         if self.context["out_features"] == 1:
@@ -52,7 +50,6 @@ class Trainer():
         if self.context["probe_weights"]:
             self.tracker.plot_weight_cov_traces()
         if self.context["probe_features"]:
-            self.tracker.plot_affine_features_nc_metrics()
             self.tracker.plot_activation_features_nc_metrics()
         if self.context["probe_kernels"]:
             self.tracker.plot_lim_kernels_nc1()
@@ -60,7 +57,6 @@ class Trainer():
             self.tracker.plot_lim_nngp_activation_kernels()
             self.tracker.plot_lim_ntk_kernels()
             self.tracker.plot_lim_kernel_spectrums()
-            self.tracker.plot_emp_nngp_kernels()
 
 
     def train(self, model, training_data):
@@ -75,7 +71,7 @@ class Trainer():
             momentum=self.context["momentum"],
             weight_decay=self.context["weight_decay"]
         )
-        num_batches = N//batch_size
+        num_batches = int(math.ceil(N/batch_size))
         logger.debug("Number of batches: {}".format(num_batches))
         # probe at init
         self.apply_tracker(model=model, training_data=training_data, loss=None, epoch=0)

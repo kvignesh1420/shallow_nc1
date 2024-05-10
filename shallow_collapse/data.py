@@ -41,14 +41,18 @@ class GaussiandD():
         self.d = self.context["in_features"]
         self.class_sizes = torch.Tensor(self.context["class_sizes"]).type(torch.int)
         assert self.N == self.class_sizes.sum()
-        # try loading saved data
-        load_success = self.load_state()
-        if not load_success: self._prepare_fresh_data()
+        # ignoring cache can be useful for statistical significance of results.
+        if self.context.get("use_cache", True):
+            # try loading saved data
+            load_success = self.load_state()
+            if not load_success: self._prepare_fresh_data()
+        else:
+            self._prepare_fresh_data()
         self.prepare_data_loader()
 
     def _prepare_fresh_data(self):
         """Helper function to create fresh data"""
-        print("preparing fresh data.")
+        logger.info("preparing fresh data.")
         num_classes = self.class_sizes.shape[0]
         X = []
         y = []
@@ -89,7 +93,7 @@ class GaussiandD():
         self.train_loader = DataLoader(train_dataset, **train_kwargs)
 
     def load_state(self):
-        print("loading/regenerating X, y, labels and perm from {}".format(self.context["data_dir"]))
+        logger.info("loading/regenerating X, y, labels and perm from {}".format(self.context["data_dir"]))
         names = ["X.pt", "y.pt", "labels.pt", "perm.pt", "perm_inv.pt"]
         for name in names:
             filepath = os.path.join(self.context["data_dir"], name)
@@ -103,12 +107,12 @@ class GaussiandD():
         self.labels = torch.load(os.path.join(self.context["data_dir"], "labels.pt"))
         self.perm = torch.load(os.path.join(self.context["data_dir"], "perm.pt"))
         self.perm_inv = torch.load(os.path.join(self.context["data_dir"], "perm_inv.pt"))
-        print("Load sucessful.")
+        logger.info("Load sucessful.")
         return True
 
 
     def save_state(self):
-        print("saving X, y, labels, perm and perm_inv to {}".format(self.context["data_dir"]))
+        logger.info("saving X, y, labels, perm and perm_inv to {}".format(self.context["data_dir"]))
         torch.save(self.X,  os.path.join(self.context["data_dir"], "X.pt"))
         torch.save(self.y,  os.path.join(self.context["data_dir"], "y.pt"))
         torch.save(self.labels,  os.path.join(self.context["data_dir"], "labels.pt"))
@@ -141,6 +145,7 @@ class GaussiandD():
         plt.legend()
         plt.savefig("{}gaussiandD_data.jpg".format(self.context["vis_dir"]))
         plt.clf()
+        plt.close()
 
 class Gaussian2DNL(GaussiandD):
     def __init__(self, context) -> None:
@@ -151,7 +156,7 @@ class Gaussian2DNL(GaussiandD):
         """
         Modify the logic to create labels +-1 instead of 0,1.
         """
-        print("preparing fresh data.")
+        logger.info("preparing fresh data.")
         class_means = self.context["class_means"]
         class_stds = self.context["class_stds"]
         class_sizes = self.context["class_sizes"]

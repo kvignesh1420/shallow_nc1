@@ -4,14 +4,18 @@ Torch implementation of the Adaptive Kernels
 Reference: https://www.nature.com/articles/s41467-023-36361-y
 """
 
+from typing import Optional
 from collections import OrderedDict
 import logging
 
+import scipy
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style("darkgrid")
 import torch
-torch.manual_seed(4)
 
 from shallow_collapse.probes import NCProbe
 from shallow_collapse.utils import setup_runtime_context
@@ -26,24 +30,38 @@ class EoSTracker:
         self.step_Q1 = OrderedDict()
         self.step_fbar_kernel = OrderedDict()
         self.step_Q1_nc1 = OrderedDict()
+        self.step_Q1_nc1_bounds = OrderedDict()
         self.step_fbar_nc1 = OrderedDict()
         self.step_loss = OrderedDict()
 
     def plot_kernel(self, K, name):
-        plt.imshow(K.detach().numpy(), cmap='viridis')
+        if isinstance(K, torch.Tensor):
+            K = K.detach().numpy()
+        plt.imshow(K, cmap='viridis')
         plt.colorbar()
         plt.tight_layout()
         plt.savefig("{}{}_kernel.jpg".format(self.context["vis_dir"], name))
         plt.clf()
 
+    def plot_kernel_sv(self, K, name):
+        if isinstance(K, torch.Tensor):
+            K = K.detach().numpy()
+        _,S,_ = np.linalg.svd(K)
+        plt.plot(S)
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}{}_kernel_sv.jpg".format(self.context["vis_dir"], name))
+        plt.clf()
+
     def plot_fbar(self, fbar, name):
         plt.plot(fbar.detach().numpy(), marker="o")
         plt.tight_layout()
+        plt.grid(True)
         plt.savefig("{}{}.jpg".format(self.context["vis_dir"], name))
         plt.clf()
 
     def store_Sigma(self, Sigma, step):
-        self.step_Sigma[step] = Sigma
+        self.step_Sigma[step] = Sigma.detach()
 
     def plot_initial_final_Sigma_esd(self):
         steps = list(self.step_Sigma.keys())
@@ -56,11 +74,13 @@ class EoSTracker:
         plt.hist(Si.detach().numpy(), bins=100, label="initial")
         plt.legend()
         plt.tight_layout()
+        plt.grid(True)
         plt.savefig("{}initial_Sigma_esd.jpg".format(self.context["vis_dir"]))
         plt.clf()
         plt.hist(Sf.detach().numpy(), bins=100, label="step{}".format(final_step))
         plt.legend()
         plt.tight_layout()
+        plt.grid(True)
         plt.savefig("{}final_Sigma_esd.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
@@ -70,18 +90,19 @@ class EoSTracker:
         final_step = steps[-1]
         initial_Sigma = self.step_Sigma[initial_step]
         final_Sigma = self.step_Sigma[final_step]
-        self.plot_kernel(K = initial_Sigma.detach(), name="Sigma_step{}".format(initial_step))
-        self.plot_kernel(K = final_Sigma.detach(), name="Sigma_step{}".format(final_step))
-        self.plot_kernel(K = (final_Sigma - initial_Sigma).detach(), name="Sigma_diff")
+        self.plot_kernel(K = initial_Sigma, name="Sigma_step{}".format(initial_step))
+        self.plot_kernel(K = final_Sigma, name="Sigma_step{}".format(final_step))
+        self.plot_kernel(K = final_Sigma - initial_Sigma, name="Sigma_diff")
 
     def plot_Sigma_trace(self):
         steps = list(self.step_Sigma.keys())
         Sigmas = list(self.step_Sigma.values())
-        traces = [np.trace(Sigma) for Sigma in Sigmas]
+        traces = np.array([torch.trace(Sigma) for Sigma in Sigmas])
         plt.plot(steps, traces, marker="o")
         plt.xlabel("steps")
         plt.ylabel("Tr(Sigma)")
         plt.tight_layout()
+        plt.grid(True)
         plt.savefig("{}Sigma_traces.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
@@ -97,6 +118,9 @@ class EoSTracker:
         self.step_Q1[step] = Q1
         nc1 = NCProbe.compute_kernel_nc1(K=Q1.detach(), N=self.N, class_sizes=class_sizes)
         self.step_Q1_nc1[step] = nc1
+        # Theoretical bounds
+        # nc1_bounds = NCProbe.compute_kernel_nc1_bounds(K=Q1.detach(), N=self.N, class_sizes=class_sizes)
+        # self.step_Q1_nc1_bounds[step] = nc1_bounds
 
     def compute_and_store_fbar_kernel_nc1(self, fbar, class_sizes, step):
         # NC1 of fbar kernel
@@ -128,7 +152,8 @@ class EoSTracker:
     def plot_Q1_nc1(self):
         steps = list(self.step_Q1_nc1.keys())
         values = list(self.step_Q1_nc1.values())
-        plt.plot(steps, values,  marker="o", label="trace_S_W_div_S_B")
+        nc1_values = [value["nc1"] for value in values]
+        plt.plot(steps, nc1_values,  marker="o", label="trace_S_W_div_S_B")
         plt.legend()
         plt.xlabel("step")
         plt.ylabel("NC1")
@@ -137,9 +162,21 @@ class EoSTracker:
         plt.savefig("{}Q1_nc1.jpg".format(self.context["vis_dir"]))
         plt.clf()
 
+        df = pd.DataFrame(values)
+        for column in ["Tr_Sigma_W", "Tr_Sigma_B"]:
+            df[column].astype(float).plot(label=column)
+        plt.xlabel("step")
+        plt.ylabel("Traces")
+        plt.legend()
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}Q1_nc1_traces.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
     def plot_fbar_kernel_nc1(self):
         steps = list(self.step_fbar_nc1.keys())
         values = list(self.step_fbar_nc1.values())
+        values = [value["nc1"] for value in values]
         plt.plot(steps, values, marker="o", label="trace_S_W_div_S_B")
         plt.legend()
         plt.xlabel("step")
@@ -174,6 +211,7 @@ class EoSSolver:
         self.sig2 = self.context["sig2"]
         self.sigw2 = self.context["sigw2"]
         self.siga2 = self.context["siga2"]
+        self.optim_step = 0
 
     def getQ1(self, Sigma: torch.Tensor, X: torch.Tensor):
         # Sigma is of shape: d_0 \times d_0
@@ -193,7 +231,7 @@ class EoSSolver:
         fbar = fbar.unsqueeze(-1)
         return fbar
 
-    def get_new_Sigma(self, Sigma: torch.Tensor, X_train: torch.Tensor, y_train: torch.Tensor, fbar: torch.Tensor):
+    def get_new_Sigma(self, Sigma: torch.Tensor, X_train: torch.Tensor, y_train: torch.Tensor, annealing_factor: Optional[int] = None):
         if not Sigma.requires_grad:
             Sigma.requires_grad_(True)
         Sigma.grad = None
@@ -209,10 +247,21 @@ class EoSSolver:
         Sigma_shift = Sigma.grad
         assert Sigma_shift.shape == Sigma.shape
 
-        Sigma_shift *= (1/self.context["h"]) # ratio corresponding to output dim/hidden layer dim
+        annealing_factor = self.h if annealing_factor is None else annealing_factor
+        Sigma_shift *= (1/annealing_factor) # ratio corresponding to (output_dim/hidden_layer_dim)
         new_Sigma_inv = torch.eye(self.d)*(self.d/self.sigw2) + Sigma_shift
         new_Sigma = torch.linalg.inv(new_Sigma_inv)
-        return new_Sigma
+        return new_Sigma.detach()
+
+    def root_fn(self, Sigma, X_train, y_train, annealing_factor):
+        if isinstance(Sigma, np.ndarray):
+            Sigma = torch.Tensor(Sigma)
+        new_Sigma = self.get_new_Sigma(Sigma=Sigma, X_train=X_train, y_train=y_train, annealing_factor=annealing_factor)
+        return (Sigma - new_Sigma).detach().numpy()
+
+    def compute_loss(self, fbar: torch.Tensor, y_train: torch.Tensor):
+        tbar = y_train - fbar
+        return torch.mean(tbar**2)
 
     def solve(self, training_data):
         # arrange data into blocks for kernel calculations
@@ -223,46 +272,60 @@ class EoSSolver:
         self.tracker.compute_and_store_data_kernel_nc1(X_train=X_train, class_sizes=training_data.class_sizes)
 
         # start with the NNGP limit solution
+        # W = torch.randn(self.d, self.h)
+        # Sigma =  W @ W.t()/ float(self.d)
         Sigma = self.sigw2*torch.eye(self.d)/float(self.d)
         self.tracker.store_Sigma(Sigma=Sigma, step=0)
         Q1 = self.getQ1(Sigma=Sigma, X=X_train)
         print("Q1 shape: {}".format(Q1.shape))
         self.tracker.compute_and_store_Q1_nc1(Q1=Q1, class_sizes=training_data.class_sizes, step=0)
+        self.tracker.plot_kernel(K=Q1, name="Q1")
+        self.tracker.plot_kernel_sv(K=Q1, name="Q1")
+        self.tracker.plot_kernel_sv(K=Sigma, name="Sigma")
+
         fbar = self.getfbar(y_train=y_train, Q1=Q1)
         print("fbar shape: {}".format(fbar.shape))
         self.tracker.compute_and_store_fbar_kernel_nc1(fbar=fbar, class_sizes=training_data.class_sizes, step=0)
         self.tracker.plot_fbar(fbar=fbar, name="fbar_gp")
 
-        loss = torch.sum( (fbar - y_train)**2 )/self.N
+        loss = self.compute_loss(fbar=fbar, y_train=y_train)
         self.tracker.store_loss(loss=loss.detach(), step=0)
         logging.info("At GP limit loss: {}".format(loss.detach()))
 
-        for step in tqdm(range(1, self.context["max_steps"]+1)):
-            new_Sigma = self.get_new_Sigma(Sigma=Sigma, X_train=X_train, y_train=y_train, fbar=fbar)
+        for annealing_factor in tqdm(self.context["annealing_factors"]):
+            self.optim_step += 1
+            if self.context["eos_update_strategy"] == "default":
+                new_Sigma = self.get_new_Sigma(Sigma=Sigma, X_train=X_train, y_train=y_train, annealing_factor=annealing_factor)
+            elif self.context["eos_update_strategy"] == "newton-krylov":
+                assert annealing_factor is not None, "annealing factor cannot be None when using newton-krylov strategy."
+                F = lambda inp: self.root_fn(Sigma=inp, X_train=X_train, y_train=y_train, annealing_factor=annealing_factor)
+                new_Sigma = scipy.optimize.newton_krylov(F, Sigma, verbose=True)
+
+            if isinstance(new_Sigma, np.ndarray):
+                new_Sigma = torch.Tensor(new_Sigma)
+            self.tracker.store_Sigma(Sigma=new_Sigma, step=self.optim_step)
             new_Q1 = self.getQ1(Sigma=new_Sigma, X=X_train)
             fbar = self.getfbar(y_train=y_train, Q1=new_Q1)
+            # self.tracker.plot_fbar(fbar=fbar, name="fbar_{}".format(self.optim_step))
             Sigma = new_Sigma
             Q1 = new_Q1
 
-            if step % self.context["probe_freq"] == 0:
-                logging.info("probing at step: {}".format(step))
-                loss = torch.sum( (fbar - y_train)**2 )/self.N
-                self.tracker.store_loss(loss=loss, step=step)
-
-                self.tracker.compute_and_store_Q1_nc1(Q1=Q1.detach(), class_sizes=training_data.class_sizes, step=step)
-                self.tracker.compute_and_store_fbar_kernel_nc1(fbar=fbar.detach(), class_sizes=training_data.class_sizes, step=step)
-                
-                self.tracker.plot_Q1_nc1()
-                self.tracker.plot_fbar_kernel_nc1()
-                self.tracker.plot_step_loss()
+            self.tracker.compute_and_store_Q1_nc1(Q1=Q1.detach(), class_sizes=training_data.class_sizes, step=self.optim_step)
+            self.tracker.compute_and_store_fbar_kernel_nc1(fbar=fbar.detach(), class_sizes=training_data.class_sizes, step=self.optim_step)
+            loss = self.compute_loss(fbar=fbar, y_train=y_train)
+            # print(loss)
+            self.tracker.store_loss(loss=loss, step=self.optim_step)
+            self.tracker.plot_step_loss()
+            self.tracker.plot_Q1_nc1()
+            self.tracker.plot_Q1_nc1_bounds()
+            self.tracker.plot_fbar_kernel_nc1()
+            self.tracker.plot_Sigma_trace()
 
         self.tracker.plot_initial_final_Q1()
         self.tracker.plot_initial_final_fbar_kernel()
-
         self.tracker.plot_fbar(fbar=fbar, name="fbar_final")
         self.tracker.plot_initial_final_Sigma()
         self.tracker.plot_initial_final_Sigma_esd()
-        self.tracker.plot_Sigma_trace()
 
 
 if __name__ == "__main__":
@@ -271,18 +334,25 @@ if __name__ == "__main__":
         "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
         "class_means": [-2, 2],
-        "class_stds": [0.3, 0.3],
+        "class_stds": [0.5, 0.5],
         "class_sizes": [512, 512],
         "in_features": 32,
         "num_classes": 2,
         "N": 1024,
         "batch_size": 1024,
         "h": 1024,
-        "sigw2": 2,
-        "siga2": 2/256,
-        "sig2": 0.001,
-        "max_steps": 100,
-        "probe_freq": 1
+        "sigw2": 1,
+        "siga2": 1,
+        "sig2": 1e-6,
+        # should be one of "default" of "newton-krylov"
+        # if "eos_update_strategy": "default", then annealing factors should be None.
+        # Simply use "annealing_factors": [None]*100 where 100 is the number of default eos updates.
+        # Else if "eos_update_strategy": "newton-krylov", then annealing factors are required.
+        # For ex: "annealing_factors": list(range(100_000, 1_000, -2_000))
+        # "eos_update_strategy": "default",
+        # "annealing_factors": [None]*10,
+        "eos_update_strategy": "newton-krylov",
+        "annealing_factors": list(range(100_000, 10_000, -10_000)) + list(range(10_000, 1000, -1000)) #+ list(range(1_000, 500, -100))
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(

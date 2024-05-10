@@ -13,13 +13,13 @@ def main():
         "training_data_cls": "Gaussian2DNL",
         "N": 1024,
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-2, 2],
+        "class_means": [-100, 100],
         "class_stds": [0.3, 0.3],
         "class_sizes": [512, 512],
         "batch_size": 1024,
-        "num_epochs": 10000,
+        "num_epochs": 1,
         "L": 2,
-        "in_features": 32,
+        "in_features": 1,
         "hidden_features": 1024,
         "out_features": 1,
         "num_classes" : 2,
@@ -30,11 +30,12 @@ def main():
         "bias_std": 0,
         "hidden_weight_std": 1,
         "final_weight_std": 1,
-        "activation": "erf",
+        "activation": "relu",
         "probe_features": True,
         "probe_kernels": True,
         "probe_weights": True,
-        "probing_frequency": 1000
+        "probing_frequency": 1,
+        "use_cache": True # set it to False for discarding cache of data and models
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
@@ -48,7 +49,7 @@ def main():
 
     model = MLPModel(context=context)
     model_path = os.path.join(context["model_dir"], "model.pth")
-    if os.path.exists(model_path):
+    if os.path.exists(model_path) and context.get("use_cache", True):
         print("Loading the init state of model from {}".format(model_path))
         model.load_state_dict(torch.load(model_path))
     else:
