@@ -6,7 +6,13 @@ import pandas as pd
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_style("darkgrid")
 import seaborn_image as isns
+plt.rcParams.update({
+    'font.size': 15,
+    'axes.linewidth': 2,
+})
 from shallow_collapse.probes import WeightProbe
 from shallow_collapse.probes import NCProbe
 from shallow_collapse.probes import DataNCProbe
@@ -21,7 +27,7 @@ class MetricTracker():
     """
     def __init__(self, context: Dict[str, Any]) -> None:
         self.context = context
-        self.epoch_weight_cov_traces = OrderedDict()
+        self.epoch_weight_cov = OrderedDict()
         self.epoch_ntk_features_nc_metrics = OrderedDict()
         self.epoch_affine_features_nc_metrics = OrderedDict()
         self.epoch_activation_features_nc_metrics = OrderedDict()
@@ -36,25 +42,55 @@ class MetricTracker():
         self.affine_features_nc_probe = NCProbe(context=self.context)
         self.activation_features_nc_probe = NCProbe(context=self.context)
 
-    def store_weight_cov_traces(self, model, epoch):
-        weight_cov_traces = self.weight_probe.capture(model=model)
-        self.epoch_weight_cov_traces[epoch] = weight_cov_traces
-        weight_cov_traces_df = pd.DataFrame.from_dict(weight_cov_traces)
-        logger.debug("\n traces of layer-wise weights at epoch {}:\n{}".format(epoch, weight_cov_traces_df))
+    def store_weight_cov(self, model, epoch):
+        weight_cov = self.weight_probe.capture(model=model)
+        self.epoch_weight_cov[epoch] = weight_cov
+        weight_cov_df = pd.DataFrame.from_dict(weight_cov)
+        logger.debug("\n cov of layer-wise weights at epoch {}:\n{}".format(epoch, weight_cov_df))
 
-    def plot_weight_cov_traces(self):
-        epochs = list(self.epoch_weight_cov_traces.keys())
+    def plot_weight_cov(self):
+        epochs = list(self.epoch_weight_cov.keys())
         for layer_idx in range(self.context["L"]):
-            values = []
-            for epoch in epochs:
-                value = self.epoch_weight_cov_traces[epoch][layer_idx]
-                values.append(value)
+            initial_epoch = epochs[0]
+            final_epoch = epochs[-1]
+            initial_cov = self.epoch_weight_cov[initial_epoch][layer_idx]["cov"]
+            initial_S = torch.linalg.svdvals(initial_cov)
+            initial_S /= torch.max(initial_S)
 
-            df = pd.DataFrame(values, index=epochs).astype(float)
-            df.plot(grid=True, xlabel="epoch", ylabel="$Tr(W@W^T)$")
+            final_cov = self.epoch_weight_cov[final_epoch][layer_idx]["cov"]
+            final_S = torch.linalg.svdvals(final_cov)
+            final_S /= torch.max(final_S)
+
+            plt.hist(initial_S, bins=100, label="init")
+            plt.hist(final_S, bins=100, label="epoch={}".format(final_epoch), alpha=0.5)
+            plt.legend()
             plt.tight_layout()
-            plt.savefig("{}weight_cov_trace_layer{}.jpg".format(self.context["vis_dir"], layer_idx+1))
+            plt.savefig("{}weight_cov_hist_layer{}.jpg".format(self.context["vis_dir"], layer_idx))
             plt.clf()
+
+            plt.plot(initial_S, label="init")
+            plt.plot(final_S, label="epoch={}".format(final_epoch))
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig("{}weight_cov_plot_layer{}.jpg".format(self.context["vis_dir"], layer_idx))
+            plt.clf()
+
+            isns.imgplot(final_cov - initial_cov, cmap="viridis", cbar=True, showticks=True)
+            plt.savefig("{}weight_cov_diff_layer{}.jpg".format(self.context["vis_dir"], layer_idx))
+            plt.clf()
+
+            
+
+            # values = []
+            # for epoch in epochs:
+                # value = self.epoch_weight_cov[epoch][layer_idx]
+                # values.append(value)
+
+            # df = pd.DataFrame(values, index=epochs).astype(float)
+            # df.plot(grid=True, xlabel="epoch", ylabel="$Tr(W@W^T)$")
+
+
+
 
     def store_data_nc_metrics(self, training_data):
         self.data_nc_metrics = self.data_nc_probe.capture(training_data=training_data)
@@ -68,20 +104,21 @@ class MetricTracker():
         self.epoch_activation_features_nc_metrics[epoch] = activation_features_nc_metrics
 
     def plot_activation_features_nc_metrics(self):
-        self._plot_epochwise_activation_features_nc_metrics()
+        self._plot_layerwise_activation_features_nc_metrics()
 
-    def _plot_epochwise_activation_features_nc_metrics(self):
+    def _plot_layerwise_activation_features_nc_metrics(self):
         epochs = list(self.epoch_activation_features_nc_metrics.keys())
-        for epoch in epochs:
-            x = list(self.epoch_activation_features_nc_metrics[epoch].keys())
-            values = list(self.epoch_activation_features_nc_metrics[epoch].values())
-            x_with_data = [*x, len(x)]
-            values_with_data = [self.data_nc_metrics[PLACEHOLDER_LAYER_ID], *values]
-            df = pd.DataFrame(values_with_data, index=x_with_data).astype(float)
-            logger.info("NC1 metrics for activation features across depth at epoch{}:\n{}".format(epoch, df))
-            # colors = ["blue", "orange", "green", "red"]
-            df.plot(grid=True, xlabel="layer idx", ylabel="NC1")
-            plt.savefig("{}activation_features_nc_metrics_epoch{}.jpg".format(self.context["vis_dir"], epoch))
+        for layer_idx in range(self.context["L"]):
+            values = []
+            for epoch in epochs:
+                value = self.epoch_activation_features_nc_metrics[epoch][layer_idx]
+                values.append(value)
+
+            df = pd.DataFrame(values, index=epochs).astype(float)
+            df = df["trace_S_W_div_S_B"].map(lambda x: np.log10(x))
+            df.plot(grid=True, xlabel="epoch", ylabel="$\log10(NC1(H))$")
+            plt.tight_layout()
+            plt.savefig("{}activation_features_nc_metrics_layer{}.jpg".format(self.context["vis_dir"], layer_idx))
             plt.clf()
 
     def compute_emp_nngp_nc1_hat_ratio(self):

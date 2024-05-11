@@ -15,6 +15,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set_style("darkgrid")
+import seaborn_image as isns
+plt.rcParams.update({
+    'font.size': 15,
+    'axes.linewidth': 2,
+})
 import torch
 
 from shallow_collapse.probes import NCProbe
@@ -37,8 +42,8 @@ class EoSTracker:
     def plot_kernel(self, K, name):
         if isinstance(K, torch.Tensor):
             K = K.detach().numpy()
-        plt.imshow(K, cmap='viridis')
-        plt.colorbar()
+
+        isns.imgplot(K, cmap="viridis", cbar=True, showticks=True)
         plt.tight_layout()
         plt.savefig("{}{}_kernel.jpg".format(self.context["vis_dir"], name))
         plt.clf()
@@ -105,6 +110,35 @@ class EoSTracker:
         plt.grid(True)
         plt.savefig("{}Sigma_traces.jpg".format(self.context["vis_dir"]))
         plt.clf()
+
+    def plot_Sigma_svd(self):
+        steps = list(self.step_Sigma.keys())
+        Sigmas = list(self.step_Sigma.values())
+
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_cov = Sigmas[0]
+        initial_S = torch.linalg.svdvals(initial_cov)
+        initial_S /= torch.max(initial_S)
+
+        final_cov = Sigmas[-1]
+        final_S = torch.linalg.svdvals(final_cov)
+        final_S /= torch.max(final_S)
+
+        plt.hist(initial_S, bins=100,  label="init")
+        plt.hist(final_S, bins=100, label="final".format(final_step), alpha=0.5)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}Sigma_svd_hist.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+        plt.plot(initial_S, label="init".format(initial_step))
+        plt.plot(final_S, label="final".format(final_step))
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}Sigma_svd_plot.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
 
     def compute_and_store_data_kernel_nc1(self, X_train, class_sizes):
         # NC1 of data
@@ -299,7 +333,7 @@ class EoSSolver:
             elif self.context["eos_update_strategy"] == "newton-krylov":
                 assert annealing_factor is not None, "annealing factor cannot be None when using newton-krylov strategy."
                 F = lambda inp: self.root_fn(Sigma=inp, X_train=X_train, y_train=y_train, annealing_factor=annealing_factor)
-                new_Sigma = scipy.optimize.newton_krylov(F, Sigma, verbose=True)
+                new_Sigma = scipy.optimize.newton_krylov(F, Sigma, verbose=False, f_tol=5e-5)
 
             if isinstance(new_Sigma, np.ndarray):
                 new_Sigma = torch.Tensor(new_Sigma)
@@ -317,7 +351,6 @@ class EoSSolver:
             self.tracker.store_loss(loss=loss, step=self.optim_step)
             self.tracker.plot_step_loss()
             self.tracker.plot_Q1_nc1()
-            self.tracker.plot_Q1_nc1_bounds()
             self.tracker.plot_fbar_kernel_nc1()
             self.tracker.plot_Sigma_trace()
 
@@ -325,7 +358,7 @@ class EoSSolver:
         self.tracker.plot_initial_final_fbar_kernel()
         self.tracker.plot_fbar(fbar=fbar, name="fbar_final")
         self.tracker.plot_initial_final_Sigma()
-        self.tracker.plot_initial_final_Sigma_esd()
+        self.tracker.plot_Sigma_svd()
 
 
 if __name__ == "__main__":
@@ -340,9 +373,9 @@ if __name__ == "__main__":
         "num_classes": 2,
         "N": 1024,
         "batch_size": 1024,
-        "h": 1024,
+        "h": 500,
         "sigw2": 1,
-        "siga2": 1,
+        "siga2": 1/128,
         "sig2": 1e-6,
         # should be one of "default" of "newton-krylov"
         # if "eos_update_strategy": "default", then annealing factors should be None.
@@ -350,9 +383,9 @@ if __name__ == "__main__":
         # Else if "eos_update_strategy": "newton-krylov", then annealing factors are required.
         # For ex: "annealing_factors": list(range(100_000, 1_000, -2_000))
         # "eos_update_strategy": "default",
-        # "annealing_factors": [None]*10,
+        # "annealing_factors": [10**5, 9*10**4],
         "eos_update_strategy": "newton-krylov",
-        "annealing_factors": list(range(100_000, 10_000, -10_000)) + list(range(10_000, 1000, -1000)) #+ list(range(1_000, 500, -100))
+        "annealing_factors": list(range(100_000, 10_000, -10_000)) + list(range(10_000, 1000, -1000)) + list(range(1_000, 400, -100))
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(

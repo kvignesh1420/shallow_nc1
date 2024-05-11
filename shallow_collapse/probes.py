@@ -18,10 +18,9 @@ class WeightProbe():
         data = OrderedDict()
         for idx, layer in enumerate(model.hidden_layers):
             W = layer.weight.data.clone()
-            S = W @ W.t()
-            trace_val = torch.trace(S)
+            C = W.t() @ W
             data[idx] = {}
-            data[idx]["cov_trace"] = trace_val
+            data[idx]["cov"] = C
         return data
 
 class NCProbe():

@@ -5,6 +5,10 @@ import math
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+plt.rcParams.update({
+    'font.size': 15,
+    'axes.linewidth': 2,
+})
 from tqdm import tqdm
 from shallow_collapse.tracker import MetricTracker
 
@@ -27,7 +31,7 @@ class Trainer():
             logger.debug("epoch: {} loss: {}".format(epoch, loss_value))
             self.tracker.store_loss(loss=loss_value, epoch=epoch)
         if self.context["probe_weights"]:
-            self.tracker.store_weight_cov_traces(model=model, epoch=epoch)
+            self.tracker.store_weight_cov(model=model, epoch=epoch)
         if self.context["probe_features"]:
             self.tracker.store_activation_features_nc_metrics(model=model, training_data=training_data, epoch=epoch)
         if self.context["probe_kernels"] and epoch == 0:
@@ -48,7 +52,7 @@ class Trainer():
         self.plot_pred(model=model, training_data=training_data)
         self.tracker.plot_loss()
         if self.context["probe_weights"]:
-            self.tracker.plot_weight_cov_traces()
+            self.tracker.plot_weight_cov()
         if self.context["probe_features"]:
             self.tracker.plot_activation_features_nc_metrics()
         if self.context["probe_kernels"]:
@@ -92,4 +96,5 @@ class Trainer():
             if epoch%self.context["probing_frequency"] == 0:
                 self.apply_tracker(model=model, training_data=training_data, loss=loss, epoch=epoch)
         self.plot_results(model=model, training_data=training_data)
+        plt.close()
 
