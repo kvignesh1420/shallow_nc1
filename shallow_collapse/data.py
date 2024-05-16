@@ -193,6 +193,50 @@ class Gaussian2DNL(GaussiandD):
         self.save_state()
 
 
+class GaussiandD4NL(GaussiandD):
+    def __init__(self, context) -> None:
+        super().__init__(context=context)
+        assert context["num_classes"] == 4
+
+    def _prepare_fresh_data(self):
+        """
+        Modify the logic to create labels +-3, +-1
+        """
+        logger.info("preparing fresh data.")
+        class_means = self.context["class_means"]
+        class_stds = self.context["class_stds"]
+        class_sizes = self.context["class_sizes"]
+        logger.info("creating data for classes -3, -1, 1, 3 with mean: {} std: {} and size: {}".format(
+            class_means, class_stds, class_sizes))
+
+        X_list = []
+        y_list = []
+        y_factors = [-3, -1, 1, 3]
+        labels_list = []
+        for i in range(4):
+            Xi = torch.normal(
+                mean=torch.tensor(class_means[i]),
+                std=torch.tensor(class_stds[i]),
+                size=(class_sizes[i], self.d),
+                requires_grad=False
+            )
+            X_list.append(Xi)
+            yi = y_factors[i]*torch.ones(class_sizes[i])
+            y_list.append(yi)
+            labelsi = i*torch.ones(class_sizes[i])
+            labels_list.append(labelsi)
+
+        X = torch.concat(X_list)
+        y = torch.cat(y_list)
+        labels = torch.cat(labels_list)
+
+        self.perm = torch.randperm(n=self.N)
+        self.perm_inv = torch.argsort(self.perm).to(self.device)
+        self.X = X[self.perm].to(self.device)
+        self.y = y[self.perm].to(self.device)
+        self.labels = labels[self.perm].to(self.device)
+        self.save_state()
+
 class MNIST2Class():
     """
     MNIST training and testing data

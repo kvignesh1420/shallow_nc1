@@ -39,7 +39,7 @@ def prepare_res_data(IN_FEATURES_LIST, data):
 def plot_dfs(dfs, CLASS_SIZES_LIST, name, context):
     fig, ax = plt.subplots()
     for class_sizes, df in zip(CLASS_SIZES_LIST, dfs):
-        ax.plot(df["d"], df["val"], marker="o", label=f"$(n_1, n_2)={class_sizes}$")
+        ax.plot(df["d"], df["val"], marker="o", label=f"$n_c={class_sizes}$")
         ax.set(xlabel="$d_0$")
         ax.set(ylabel="$\log_{10}(NC1(H))$")
         ax.fill_between(df["d"], df.lower, df.upper, alpha=0.4)
@@ -52,7 +52,7 @@ def plot_dfs(dfs, CLASS_SIZES_LIST, name, context):
 def plot_rel_dfs(dfs, CLASS_SIZES_LIST, name, context):
     fig, ax = plt.subplots()
     for class_sizes, df in zip(CLASS_SIZES_LIST, dfs):
-        ax.plot(df["d"], df["val"], marker="o", label=f"$(n_1, n_2)={class_sizes}$")
+        ax.plot(df["d"], df["val"], marker="o", label=f"$n_c={class_sizes}$")
         ax.set(xlabel="$d_0$")
         ax.set(ylabel="$\log_{10}(NC1(H)/NC1(X))$")
         ax.fill_between(df["d"], df.lower, df.upper, alpha=0.4)
@@ -68,9 +68,9 @@ def main():
         # note that the mean/std values will be broadcasted across `in_features`
         "class_means": [-2, 2],
         "class_stds": [0.5, 0.5],
-        "num_epochs": 5000,
-        "N": 1024,
-        "batch_size": 1024,
+        "num_epochs": 1000,
+        "N": 1024*2,
+        "batch_size": 1024*2,
         "L": 2,
         "out_features": 1,
         "hidden_features": 500,
@@ -86,7 +86,7 @@ def main():
         "probe_features": True,
         "probe_kernels": False,
         "probe_weights": False,
-        "probing_frequency": 5000,
+        "probing_frequency": 1000,
         "use_cache": False
     }
     context = setup_runtime_context(context=base_context)
@@ -98,13 +98,13 @@ def main():
     )
     logging.info("context: \n{}".format(context))
 
-    CLASS_SIZES_LIST = [(512, 512), (384, 640), (256, 768), (128, 896)]
-    IN_FEATURES_LIST = [128]
-    REPEAT = 1
+    CLASS_SIZES_LIST = [(512*2, 512*2), (384*2, 640*2), (256*2, 768*2), (128*2, 896*2)]
+    IN_FEATURES_LIST = [1, 2, 8, 32, 128]
+    REPEAT = 2
 
     act_dfs = []
     act_rel_dfs = []
-    
+
     for class_sizes in tqdm(CLASS_SIZES_LIST):
         act_nc1_data = defaultdict(list)
         act_rel_nc1_data = defaultdict(list)
@@ -152,11 +152,16 @@ def main():
         act_rel_dfs.append(act_rel_df)
    
     activation = context["activation"]
+    fig_L = context["L"]
+    fig_N = context["N"]
+    fig_C = context["num_classes"]
     fig_h = context["hidden_features"]
     fig_mu = abs(context["class_means"][0])
     fig_std = abs(context["class_stds"][0])
-    plot_dfs(dfs=act_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST, name="act_nc1_{}_h_{}_mu_{}_std_{}_imbalanced.jpg".format(activation, fig_h, fig_mu, fig_std), context=context)
-    plot_rel_dfs(dfs=act_rel_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST, name="act_rel_nc1_{}_h_{}_mu_{}_std_{}_imbalanced.jpg".format(activation, fig_h, fig_mu, fig_std), context=context)
+    plot_dfs(dfs=act_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+             name="act_nc1_{}_h_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(activation, fig_h, fig_mu, fig_std, fig_L, fig_N, fig_C), context=context)
+    plot_rel_dfs(dfs=act_rel_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+                 name="act_rel_nc1_{}_h_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(activation, fig_h, fig_mu, fig_std, fig_L, fig_N, fig_C), context=context)
 
 if __name__ == "__main__":
     main()

@@ -36,10 +36,10 @@ def prepare_res_data(IN_FEATURES_LIST, data):
         })
     return res_data
 
-def plot_dfs(dfs, N_LIST, name, context):
+def plot_dfs(dfs, CLASS_SIZES_LIST, name, context):
     fig, ax = plt.subplots()
-    for N, df in zip(N_LIST, dfs):
-        ax.plot(df["d"], df["val"], marker="o", label=f"N={N}")
+    for class_sizes, df in zip(CLASS_SIZES_LIST, dfs):
+        ax.plot(df["d"], df["val"], marker="o", label=f"$n_c={class_sizes}$")
         ax.set(xlabel="$d_0$")
         ax.set(ylabel="$\log_{10}(NC1(H))$")
         ax.fill_between(df["d"], df.lower, df.upper, alpha=0.4)
@@ -48,10 +48,11 @@ def plot_dfs(dfs, N_LIST, name, context):
     plt.savefig("{}{}".format(context["vis_dir"], name))
     plt.clf()
 
-def plot_rel_dfs(dfs, N_LIST, name, context):
+
+def plot_rel_dfs(dfs, CLASS_SIZES_LIST, name, context):
     fig, ax = plt.subplots()
-    for N, df in zip(N_LIST, dfs):
-        ax.plot(df["d"], df["val"], marker="o", label=f"N={N}")
+    for class_sizes, df in zip(CLASS_SIZES_LIST, dfs):
+        ax.plot(df["d"], df["val"], marker="o", label=f"$n_c={class_sizes}$")
         ax.set(xlabel="$d_0$")
         ax.set(ylabel="$\log_{10}(NC1(H)/NC1(X))$")
         ax.fill_between(df["d"], df.lower, df.upper, alpha=0.4)
@@ -80,7 +81,7 @@ class NoVisEosSolver(EoSSolver):
             elif self.context["eos_update_strategy"] == "newton-krylov":
                 assert annealing_factor is not None, "annealing factor cannot be None when using newton-krylov strategy."
                 F = lambda inp: self.root_fn(Sigma=inp, X_train=X_train, y_train=y_train, annealing_factor=annealing_factor)
-                new_Sigma = scipy.optimize.newton_krylov(F, Sigma, verbose=False, f_tol=5e-3, maxiter=100, inner_maxiter=100)
+                new_Sigma = scipy.optimize.newton_krylov(F, Sigma, verbose=False, f_tol=5e-2, maxiter=100, inner_maxiter=100)
 
             if isinstance(new_Sigma, np.ndarray):
                 new_Sigma = torch.Tensor(new_Sigma)
@@ -94,12 +95,14 @@ class NoVisEosSolver(EoSSolver):
 def main():
     base_context = {
         "name": "adaptive_kernels",
-        "training_data_cls": "GaussiandD4NL",
+        "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-6, -2, 2, 6],
-        "class_stds": [0.5, 0.5, 0.5, 0.5],
+        "class_means": [-2, 2],
+        "class_stds": [0.5, 0.5],
+        "N": 1024*2,
+        "batch_size": 1024*2,
         "out_features": 1,
-        "num_classes" : 4,
+        "num_classes" : 2,
         "h": 500,
         "bias_std": 0,
         "hidden_weight_std": 1,
@@ -127,22 +130,21 @@ def main():
     )
     logging.info("context: \n{}".format(context))
 
-    N_LIST = [128, 256, 512, 1024]
+    CLASS_SIZES_LIST = [(512*2, 512*2), (384*2, 640*2), (256*2, 768*2), (128*2, 896*2)]
     IN_FEATURES_LIST = [1, 2, 8, 32, 128]
     REPEAT = 2
 
     ak_dfs = []
     ak_rel_dfs = []
-    for N in tqdm(N_LIST):
+    for class_sizes in tqdm(CLASS_SIZES_LIST):
         ak_nc1_data = defaultdict(list)
         ak_rel_nc1_data = defaultdict(list)
 
         for in_features in IN_FEATURES_LIST:
             context["in_features"] = in_features
-            context["N"] = N
-            context["batch_size"] = N
-            C = context["num_classes"]
-            context["class_sizes"] = [N//C for _ in range(C)]
+            N = context["N"]
+            context["class_sizes"] = class_sizes
+            assert sum(class_sizes) == N
             for _ in range(REPEAT):
                 training_data = data_cls_map[context["training_data_cls"]](context=context)
                 data_nc_probe = DataNCProbe(context=context)
@@ -164,12 +166,16 @@ def main():
 
         ak_dfs.append(ak_df)
         ak_rel_dfs.append(ak_rel_df)
-
+    
+    fig_N = context["N"]
+    fig_C = context["num_classes"]
     fig_h = abs(context["h"])
     fig_mu = abs(context["class_means"][0])
     fig_std = abs(context["class_stds"][0])
-    plot_dfs(dfs=ak_dfs, N_LIST=N_LIST, name="ak_nc1_erf_h_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(fig_h, fig_mu, fig_std, C), context=context)
-    plot_rel_dfs(dfs=ak_rel_dfs, N_LIST=N_LIST, name="ak_rel_nc1_erf_h_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(fig_h, fig_mu, fig_std, C), context=context)
+    plot_dfs(dfs=ak_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+             name="ak_nc1_erf_h_{}_mu_{}_std_{}_N_{}_C_{}_imbalanced.jpg".format(fig_h, fig_mu, fig_std, fig_N, fig_C), context=context)
+    plot_rel_dfs(dfs=ak_rel_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+                 name="ak_rel_nc1_erf_h_{}_mu_{}_std_{}_N_{}_C_{}_imbalanced.jpg".format(fig_h, fig_mu, fig_std, fig_N, fig_C), context=context)
 
 
 if __name__ == "__main__":

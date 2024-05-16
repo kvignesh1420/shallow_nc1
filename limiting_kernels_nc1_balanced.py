@@ -60,13 +60,13 @@ def plot_rel_dfs(dfs, N_LIST, name, context):
 
 def main():
     base_context = {
-        "training_data_cls": "Gaussian2DNL",
+        "training_data_cls": "GaussiandD4NL",
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-2, 2],
-        "class_stds": [0.5, 0.5],
+        "class_means": [-6, -2, 2, 6],
+        "class_stds": [0.5, 0.5, 0.5, 0.5],
         "L": 2,
         "out_features": 1,
-        "num_classes" : 2,
+        "num_classes" : 4,
         "bias_std": 0,
         "hidden_weight_std": 1,
         "final_weight_std": 1,
@@ -101,7 +101,8 @@ def main():
             context["in_features"] = in_features
             context["N"] = N
             context["batch_size"] = N
-            context["class_sizes"] = [N//2, N//2]
+            C = context["num_classes"]
+            context["class_sizes"] = [N//C for _ in range(C)]
             for _ in range(REPEAT):
                 training_data = data_cls_map[context["training_data_cls"]](context=context)
                 data_nc_probe = DataNCProbe(context=context)
@@ -146,11 +147,11 @@ def main():
     activation = context["activation"]
     fig_mu = abs(context["class_means"][0])
     fig_std = abs(context["class_stds"][0])
-    plot_dfs(dfs=nngp_act_dfs, N_LIST=N_LIST, name="nngp_act_nc1_{}_mu_{}_std_{}_balanced.jpg".format(activation, fig_mu, fig_std), context=context)
-    plot_rel_dfs(dfs=nngp_act_rel_dfs, N_LIST=N_LIST, name="nngp_act_rel_nc1_{}_mu_{}_std_{}_balanced.jpg".format(activation, fig_mu, fig_std), context=context)
+    plot_dfs(dfs=nngp_act_dfs, N_LIST=N_LIST, name="nngp_act_nc1_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(activation, fig_mu, fig_std, C), context=context)
+    plot_rel_dfs(dfs=nngp_act_rel_dfs, N_LIST=N_LIST, name="nngp_act_rel_nc1_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(activation, fig_mu, fig_std, C), context=context)
 
-    plot_dfs(dfs=ntk_dfs, N_LIST=N_LIST, name="ntk_nc1_{}_mu_{}_std_{}_balanced.jpg".format(activation, fig_mu, fig_std), context=context)
-    plot_rel_dfs(dfs=ntk_rel_dfs, N_LIST=N_LIST, name="ntk_rel_nc1_{}_mu_{}_std_{}_balanced.jpg".format(activation, fig_mu, fig_std), context=context)
+    plot_dfs(dfs=ntk_dfs, N_LIST=N_LIST, name="ntk_nc1_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(activation, fig_mu, fig_std, C), context=context)
+    plot_rel_dfs(dfs=ntk_rel_dfs, N_LIST=N_LIST, name="ntk_rel_nc1_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(activation, fig_mu, fig_std, C), context=context)
 
 
 if __name__ == "__main__":
