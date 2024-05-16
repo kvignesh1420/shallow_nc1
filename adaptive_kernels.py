@@ -250,7 +250,7 @@ class EoSSolver:
     def getQ1(self, Sigma: torch.Tensor, X: torch.Tensor):
         # Sigma is of shape: d_0 \times d_0
         # X is of shape: N \times d_0
-        K = X @ Sigma @ X.t()
+        K = X @ Sigma.to(self.context["device"]) @ X.t()
         diag_K_vector = torch.diag(K) # returns a vector with diag elements
         scaled_diag_K_vector = torch.pow(2 * diag_K_vector + 1, -1/2) # elementise pow of -0.5
         scaled_diag_K = torch.diag(scaled_diag_K_vector) # convert the vector to a diag matrix
@@ -261,7 +261,7 @@ class EoSSolver:
     def getfbar(self, y_train: torch.Tensor, Q1: torch.Tensor):
         # y_train is a vector of shape: (N)
         # Q1 is the post-activation kernel of shape: N x N
-        fbar = Q1 @ torch.linalg.inv(Q1 + self.sig2*torch.eye(Q1.shape[0])) @ y_train
+        fbar = Q1 @ torch.linalg.inv(Q1 + self.sig2*torch.eye(Q1.shape[0]).to(self.context["device"])) @ y_train
         fbar = fbar.unsqueeze(-1)
         return fbar
 
@@ -272,7 +272,7 @@ class EoSSolver:
         Q1 = self.getQ1(Sigma=Sigma, X=X_train)
         Q1_inert = Q1.clone().detach() # clone and detach the tensor. Detach automatically sets required_grad = False
         fbar = self.getfbar(y_train=y_train, Q1=Q1_inert)
-        A = - self.sig2 * (y_train - fbar) @ (y_train - fbar).t() + torch.linalg.inv(Q1_inert + self.sig2*torch.eye(Q1_inert.shape[0]))
+        A = - self.sig2 * (y_train - fbar) @ (y_train - fbar).t() + torch.linalg.inv(Q1_inert + self.sig2*torch.eye(Q1_inert.shape[0]).to(self.context["device"]))
         assert A.requires_grad == False
         assert fbar.requires_grad == False
 
@@ -367,9 +367,9 @@ if __name__ == "__main__":
         "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
         "class_means": [-2, 2],
-        "class_stds": [0.5, 0.5],
+        "class_stds": [2, 2],
         "class_sizes": [512, 512],
-        "in_features": 32,
+        "in_features": 128,
         "num_classes": 2,
         "N": 1024,
         "batch_size": 1024,

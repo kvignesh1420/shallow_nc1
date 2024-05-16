@@ -94,12 +94,12 @@ class NoVisEosSolver(EoSSolver):
 def main():
     base_context = {
         "name": "adaptive_kernels",
-        "training_data_cls": "GaussiandD4NL",
+        "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-6, -2, 2, 6],
-        "class_stds": [0.5, 0.5, 0.5, 0.5],
+        "class_means": [-2, 2],
+        "class_stds": [1, 1],
         "out_features": 1,
-        "num_classes" : 4,
+        "num_classes" : 2,
         "h": 500,
         "bias_std": 0,
         "hidden_weight_std": 1,
@@ -128,7 +128,7 @@ def main():
     logging.info("context: \n{}".format(context))
 
     N_LIST = [128, 256, 512, 1024]
-    IN_FEATURES_LIST = [1, 2, 8, 32, 128]
+    IN_FEATURES_LIST = [8, 16, 32, 64, 128]
     REPEAT = 2
 
     ak_dfs = []

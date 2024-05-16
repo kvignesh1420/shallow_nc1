@@ -65,15 +65,15 @@ def main():
     base_context = {
         "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-2, 2, ],
+        "class_means": [-2, 2],
         "class_stds": [0.5, 0.5],
         "num_epochs": 1000,
-        "L": 2,
+        "L": 3,
         "out_features": 1,
-        "hidden_features": 2000,
+        "hidden_features": 500,
         "num_classes" : 2,
         "use_batch_norm": False,
-        "lr": 1e-4,
+        "lr": 1e-3,
         "momentum": 0.0,
         "weight_decay": 1e-6,
         "bias_std": 0,
@@ -95,9 +95,9 @@ def main():
     )
     logging.info("context: \n{}".format(context))
 
-    N_LIST = [128, 256, 512, 1024]
-    IN_FEATURES_LIST = [1, 2, 8, 32, 128]
-    REPEAT = 2
+    N_LIST = [1024]
+    IN_FEATURES_LIST = [128]
+    REPEAT = 1
 
     act_dfs = []
     act_rel_dfs = []
@@ -133,7 +133,10 @@ def main():
                 trainer.train(model=model, training_data=training_data)
 
                 epochs = list(tracker.epoch_activation_features_nc_metrics.keys())
-                act_nc1 = tracker.epoch_activation_features_nc_metrics[epochs[-1]][0]["trace_S_W_div_S_B"]
+                L = context["L"]
+                # zero indexed and penultimate layer: so L-2
+                assert len(tracker.epoch_activation_features_nc_metrics[epochs[-1]]) == L
+                act_nc1 = tracker.epoch_activation_features_nc_metrics[epochs[-1]][L-2]["trace_S_W_div_S_B"]
                 if np.isnan(np.log10(act_nc1)):
                     continue
 
@@ -150,11 +153,14 @@ def main():
         act_rel_dfs.append(act_rel_df)
 
     activation = context["activation"]
+    fig_L = context["L"]
     fig_h = context["hidden_features"]
     fig_mu = abs(context["class_means"][0])
     fig_std = abs(context["class_stds"][0])
-    plot_dfs(dfs=act_dfs, N_LIST=N_LIST, name="act_nc1_{}_h_{}_mu_{}_std_{}_C_{}_balanced.jpg".format(activation, fig_h, fig_mu, fig_std, C), context=context)
-    plot_rel_dfs(dfs=act_rel_dfs, N_LIST=N_LIST, name="act_rel_nc1_{}_h_{}_mu_{}_std_{}_C_{}balanced.jpg".format(activation, fig_h, fig_mu, fig_std, C), context=context)
+    plot_dfs(dfs=act_dfs, N_LIST=N_LIST,
+             name="act_nc1_{}_h_{}_mu_{}_std_{}_L_{}_C_{}_balanced.jpg".format(activation, fig_h, fig_mu, fig_std, fig_L, C), context=context)
+    plot_rel_dfs(dfs=act_rel_dfs, N_LIST=N_LIST,
+                 name="act_rel_nc1_{}_h_{}_mu_{}_std_{}_L_{}_C_{}_balanced.jpg".format(activation, fig_h, fig_mu, fig_std, fig_L, C), context=context)
 
 if __name__ == "__main__":
     main()

@@ -79,7 +79,10 @@ class NCProbe():
             self.layerwise_global_sum[layer_idx] = torch.sum(self.layerwise_class_sums[layer_idx], dim=0)
             self.layerwise_global_mean[layer_idx] = self.layerwise_global_sum[layer_idx]/torch.sum(self.class_sizes)
             # print(self.layerwise_class_sums[layer_idx].shape, self.class_sizes.shape)
-            self.layerwise_class_means[layer_idx] = torch.div(self.layerwise_class_sums[layer_idx], self.class_sizes.unsqueeze(1))
+            self.layerwise_class_means[layer_idx] = torch.div(
+                self.layerwise_class_sums[layer_idx].to(self.context["device"]),
+                self.class_sizes.unsqueeze(1).to(self.context["device"])
+            )
 
 
     def _track_cov(self, features, labels):
@@ -202,9 +205,9 @@ class NCProbe():
         logger.info("Tr_Sigma_W: {}".format(Tr_Sigma_W))
         logger.info("Tr_Sigma_B: {}".format(Tr_Sigma_B))
         return {
-            "Tr_Sigma_W": Tr_Sigma_W.detach().numpy(),
-            "Tr_Sigma_B": Tr_Sigma_B.detach().numpy(),
-            "nc1": (Tr_Sigma_W/Tr_Sigma_B).detach().numpy()
+            "Tr_Sigma_W": Tr_Sigma_W.detach().cpu().numpy(),
+            "Tr_Sigma_B": Tr_Sigma_B.detach().cpu().numpy(),
+            "nc1": (Tr_Sigma_W/Tr_Sigma_B).detach().cpu().numpy()
         }
 
     @staticmethod
