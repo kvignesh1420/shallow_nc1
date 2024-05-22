@@ -97,7 +97,7 @@ def main():
         "training_data_cls": "Gaussian2DNL",
         # note that the mean/std values will be broadcasted across `in_features`
         "class_means": [-2, 2],
-        "class_stds": [1, 1],
+        "class_stds": [0.5, 0.5],
         "out_features": 1,
         "num_classes" : 2,
         "h": 500,
@@ -128,8 +128,8 @@ def main():
     logging.info("context: \n{}".format(context))
 
     N_LIST = [128, 256, 512, 1024]
-    IN_FEATURES_LIST = [8, 16, 32, 64, 128]
-    REPEAT = 2
+    IN_FEATURES_LIST = [1, 2, 8, 32, 128]
+    REPEAT = 10
 
     ak_dfs = []
     ak_rel_dfs = []

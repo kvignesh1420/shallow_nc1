@@ -68,7 +68,7 @@ def main():
         "class_means": [-2, 2],
         "class_stds": [0.5, 0.5],
         "num_epochs": 1000,
-        "L": 3,
+        "L": 2,
         "out_features": 1,
         "hidden_features": 500,
         "num_classes" : 2,
@@ -95,9 +95,9 @@ def main():
     )
     logging.info("context: \n{}".format(context))
 
-    N_LIST = [1024]
-    IN_FEATURES_LIST = [128]
-    REPEAT = 1
+    N_LIST = [128, 256, 512, 1024]
+    IN_FEATURES_LIST = [1, 2, 8, 32, 128]
+    REPEAT = 10
 
     act_dfs = []
     act_rel_dfs = []

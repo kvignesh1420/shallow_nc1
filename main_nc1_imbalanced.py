@@ -100,7 +100,7 @@ def main():
 
     CLASS_SIZES_LIST = [(512*2, 512*2), (384*2, 640*2), (256*2, 768*2), (128*2, 896*2)]
     IN_FEATURES_LIST = [1, 2, 8, 32, 128]
-    REPEAT = 2
+    REPEAT = 10
 
     act_dfs = []
     act_rel_dfs = []
