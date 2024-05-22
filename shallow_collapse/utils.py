@@ -5,18 +5,12 @@ import os
 import torch
 import json
 import hashlib
-from shallow_collapse.data import GaussiandD
 from shallow_collapse.data import Gaussian2DNL
 from shallow_collapse.data import GaussiandD4NL
-from shallow_collapse.data import MNIST2Class
-from shallow_collapse.data import MNIST
 
 data_cls_map = {
-    "GaussiandD": GaussiandD,
     "Gaussian2DNL": Gaussian2DNL,
     "GaussiandD4NL": GaussiandD4NL,
-    "MNIST2Class": MNIST2Class,
-    "MNIST": MNIST
 }
 
 def prepare_data_hash(context):
