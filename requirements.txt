@@ -3,8 +3,6 @@ joblib==1.2.0
 jsonschema==4.17.1
 matplotlib==3.6.2
 matplotlib-inline==0.1.6
-memory-profiler==0.61.0
-networkx==2.8.8
 numpy==1.23.5
 outdated==0.2.2
 packaging==21.3
@@ -14,7 +12,6 @@ pickleshare==0.7.5
 Pillow==9.3.0
 prompt-toolkit==3.0.33
 psutil==5.9.4
-PyGCL==0.1.2
 Pygments==2.13.0
 pygrok==1.0.0
 regex==2022.10.31
