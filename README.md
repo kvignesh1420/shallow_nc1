@@ -1,4 +1,4 @@
-# Neural Collapse in shallow neural networks
+# Neural Collapse in Shallow Neural Networks
 
 This effort aims to analyze the extent of neural collapse in shallow neural networks via kernel based analysis. Especially, we leverage the NNGP and NTK characterizations of a 2-layer fully connected neural network and analyze NC1 based on the kernel matrices.
 
