@@ -137,10 +137,10 @@ class _BulkBalancedRunner:
                     rel_nc1_info[in_features].append(np.log10(nc1 / (data_nc1 + TAU)))
 
             res_info = BulkBalancedTracker.prepare_res_info(
-                IN_FEATURES_LIST=IN_FEATURES_LIST, data=nc1_info
+                IN_FEATURES_LIST=IN_FEATURES_LIST, info=nc1_info
             )
             rel_res_info = BulkBalancedTracker.prepare_res_info(
-                IN_FEATURES_LIST=IN_FEATURES_LIST, data=rel_nc1_info
+                IN_FEATURES_LIST=IN_FEATURES_LIST, info=rel_nc1_info
             )
 
             df = pd.DataFrame(res_info)
@@ -213,10 +213,10 @@ class _BulkImbalancedRunner:
                     rel_nc1_info[in_features].append(np.log10(nc1 / (data_nc1 + TAU)))
 
             res_info = BulkImbalancedTracker.prepare_res_info(
-                IN_FEATURES_LIST=IN_FEATURES_LIST, data=nc1_info
+                IN_FEATURES_LIST=IN_FEATURES_LIST, info=nc1_info
             )
             rel_res_info = BulkImbalancedTracker.prepare_res_info(
-                IN_FEATURES_LIST=IN_FEATURES_LIST, data=rel_nc1_info
+                IN_FEATURES_LIST=IN_FEATURES_LIST, info=rel_nc1_info
             )
 
             df = pd.DataFrame(res_info)
