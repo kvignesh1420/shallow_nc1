@@ -1,0 +1,46 @@
+name: adaptive_kernels
+training_data_cls: Gaussian2DNL
+# note that the mean/std values will be broadcasted across `in_features`
+class_means: 
+  - -2
+  - 2
+class_stds: 
+  - 2
+  - 2
+class_sizes: 
+  - 512
+  - 512
+in_features: 128
+num_classes: 2
+N: 1024
+batch_size: 1024
+h: 500
+sigw2: 1
+siga2: 0.0078125  # 1 / 128
+sig2: 0.000001
+eos_update_strategy: newton-krylov
+annealing_factors: 
+  - 100000
+  - 90000
+  - 80000
+  - 70000
+  - 60000
+  - 50000
+  - 40000
+  - 30000
+  - 20000
+  - 10000
+  - 9000
+  - 8000
+  - 7000
+  - 6000
+  - 5000
+  - 4000
+  - 3000
+  - 2000
+  - 1000
+  - 900
+  - 800
+  - 700
+  - 600
+  - 500

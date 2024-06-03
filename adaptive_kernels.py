@@ -29,6 +29,7 @@ import torch
 from shallow_collapse.probes import NCProbe
 from shallow_collapse.utils import setup_runtime_context
 from shallow_collapse.utils import data_cls_map
+from shallow_collapse.utils import get_exp_context
 
 
 class EoSTracker:
@@ -435,33 +436,7 @@ class EoSSolver:
 
 
 if __name__ == "__main__":
-    exp_context = {
-        "name": "adaptive_kernels",
-        "training_data_cls": "Gaussian2DNL",
-        # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-2, 2],
-        "class_stds": [2, 2],
-        "class_sizes": [512, 512],
-        "in_features": 128,
-        "num_classes": 2,
-        "N": 1024,
-        "batch_size": 1024,
-        "h": 500,
-        "sigw2": 1,
-        "siga2": 1 / 128,
-        "sig2": 1e-6,
-        # should be one of "default" of "newton-krylov"
-        # if "eos_update_strategy": "default", then annealing factors should be None.
-        # Simply use "annealing_factors": [None]*100 where 100 is the number of default eos updates.
-        # Else if "eos_update_strategy": "newton-krylov", then annealing factors are required.
-        # For ex: "annealing_factors": list(range(100_000, 1_000, -2_000))
-        # "eos_update_strategy": "default",
-        # "annealing_factors": [10**5, 9*10**4],
-        "eos_update_strategy": "newton-krylov",
-        "annealing_factors": list(range(100_000, 10_000, -10_000))
-        + list(range(10_000, 1000, -1000))
-        + list(range(1_000, 400, -100)),
-    }
+    exp_context = get_exp_context()
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
         filename=context["results_file"],

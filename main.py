@@ -7,37 +7,11 @@ from shallow_collapse.trainer import Trainer
 
 from shallow_collapse.utils import setup_runtime_context
 from shallow_collapse.utils import data_cls_map
+from shallow_collapse.utils import get_exp_context
 
 
 def main():
-    exp_context = {
-        "training_data_cls": "Gaussian2DNL",
-        "N": 1024,
-        # note that the mean/std values will be broadcasted across `in_features`
-        "class_means": [-2, 2],
-        "class_stds": [0.5, 0.5],
-        "class_sizes": [512, 512],
-        "batch_size": 1024,
-        "num_epochs": 1000,
-        "L": 2,
-        "in_features": 1,
-        "hidden_features": 2000,
-        "out_features": 1,
-        "num_classes": 2,
-        "use_batch_norm": False,
-        "lr": 1e-4,
-        "momentum": 0.0,
-        "weight_decay": 1e-6,
-        "bias_std": 0,
-        "hidden_weight_std": 1,
-        "final_weight_std": 1.97,
-        "activation": "erf",
-        "probe_features": True,
-        "probe_kernels": False,
-        "probe_weights": True,
-        "probing_frequency": 1000,
-        "use_cache": True,  # set it to False for discarding cache of data and models
-    }
+    exp_context = get_exp_context()
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
         filename=context["results_file"],

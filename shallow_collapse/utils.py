@@ -4,6 +4,8 @@ import sys
 import os
 import torch
 import json
+import yaml
+import argparse
 import hashlib
 from shallow_collapse.data import Gaussian2DNL
 from shallow_collapse.data import GaussiandD4NL
@@ -12,6 +14,18 @@ data_cls_map = {
     "Gaussian2DNL": Gaussian2DNL,
     "GaussiandD4NL": GaussiandD4NL,
 }
+
+
+def get_exp_context():
+    parser = argparse.ArgumentParser(
+        description="Arguments for running the experiments"
+    )
+    parser.add_argument("config_file", type=str, help="config file for the run")
+    parsed_args = parser.parse_args()
+
+    with open(parsed_args.config_file) as f:
+        exp_context = yaml.safe_load(f)
+    return exp_context
 
 
 def prepare_data_hash(context):
