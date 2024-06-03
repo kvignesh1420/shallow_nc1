@@ -1,0 +1,18 @@
+training_data_cls: Gaussian2DNL
+# note that the mean/std values will be broadcasted across `in_features`
+class_means:
+  - -2
+  - 2
+class_stds:
+  - 0.5
+  - 0.5
+L: 2
+in_features: 1
+hidden_features: na
+out_features: 1
+num_classes: 2
+bias_std: 0
+hidden_weight_std: 1
+final_weight_std: 1.97
+activation: erf
+use_cache: false

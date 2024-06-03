@@ -17,6 +17,7 @@ from shallow_collapse.tracker import EoSTracker
 class EoSSolver:
     def __init__(self, context):
         self.context = context
+        self.lightweight = self.context["lightweight"]  # fast run without plots/metrics
         self.tracker = EoSTracker(context=context)
         self.d = self.context["in_features"]
         self.h = self.context["h"]
@@ -111,88 +112,85 @@ class EoSSolver:
         print(
             "X_train.shape: {} y_train.shape: {}".format(X_train.shape, y_train.shape)
         )
-
-        self.tracker.compute_and_store_data_kernel_nc1(
-            X_train=X_train, class_sizes=training_data.class_sizes
-        )
+        if not self.lightweight:
+            self.tracker.compute_and_store_data_kernel_nc1(
+                X_train=X_train, class_sizes=training_data.class_sizes
+            )
 
         # start with the NNGP limit solution
         # W = torch.randn(self.d, self.h)
         # Sigma =  W @ W.t()/ float(self.d)
         Sigma = self.sigw2 * torch.eye(self.d) / float(self.d)
-        self.tracker.store_Sigma(Sigma=Sigma, step=0)
-        Q1 = self.getQ1(Sigma=Sigma, X=X_train)
-        print("Q1 shape: {}".format(Q1.shape))
-        self.tracker.compute_and_store_Q1_nc1(
-            Q1=Q1, class_sizes=training_data.class_sizes, step=0
-        )
-        self.tracker.plot_kernel(K=Q1, name="Q1")
-        self.tracker.plot_kernel_sv(K=Q1, name="Q1")
-        self.tracker.plot_kernel_sv(K=Sigma, name="Sigma")
+        Q1 = self.getQ1(Sigma=Sigma, X=X_train)  # shape: N x N
 
-        fbar = self.getfbar(y_train=y_train, Q1=Q1)
-        print("fbar shape: {}".format(fbar.shape))
-        self.tracker.compute_and_store_fbar_kernel_nc1(
-            fbar=fbar, class_sizes=training_data.class_sizes, step=0
-        )
-        self.tracker.plot_fbar(fbar=fbar, name="fbar_gp")
+        if not self.lightweight:
+            self.tracker.store_Sigma(Sigma=Sigma, step=0)
+            self.tracker.compute_and_store_Q1_nc1(
+                Q1=Q1, class_sizes=training_data.class_sizes, step=0
+            )
+            self.tracker.plot_kernel(K=Q1, name="Q1")
+            self.tracker.plot_kernel_sv(K=Q1, name="Q1")
+            self.tracker.plot_kernel_sv(K=Sigma, name="Sigma")
 
-        loss = self.compute_loss(fbar=fbar, y_train=y_train)
-        self.tracker.store_loss(loss=loss.detach(), step=0)
-        logging.info("At GP limit loss: {}".format(loss.detach()))
+            fbar = self.getfbar(y_train=y_train, Q1=Q1)
+            print("fbar shape: {}".format(fbar.shape))
+            self.tracker.compute_and_store_fbar_kernel_nc1(
+                fbar=fbar, class_sizes=training_data.class_sizes, step=0
+            )
+            self.tracker.plot_fbar(fbar=fbar, name="fbar_gp")
+
+            loss = self.compute_loss(fbar=fbar, y_train=y_train)
+            self.tracker.store_loss(loss=loss.detach(), step=0)
+            logging.info("At GP limit loss: {}".format(loss.detach()))
 
         for annealing_factor in tqdm(self.context["annealing_factors"]):
             self.optim_step += 1
-            if self.context["eos_update_strategy"] == "default":
-                new_Sigma = self.get_new_Sigma(
-                    Sigma=Sigma,
-                    X_train=X_train,
-                    y_train=y_train,
-                    annealing_factor=annealing_factor,
-                )
-            elif self.context["eos_update_strategy"] == "newton-krylov":
-                assert (
-                    annealing_factor is not None
-                ), "annealing factor cannot be None when using newton-krylov strategy."
-                F = lambda inp: self.root_fn(
-                    Sigma=inp,
-                    X_train=X_train,
-                    y_train=y_train,
-                    annealing_factor=annealing_factor,
-                )
-                new_Sigma = scipy.optimize.newton_krylov(
-                    F, Sigma, verbose=False, f_tol=5e-5
-                )
+            assert (
+                annealing_factor is not None
+            ), "annealing factor cannot be None when using newton-krylov strategy."
+            F = lambda inp: self.root_fn(
+                Sigma=inp,
+                X_train=X_train,
+                y_train=y_train,
+                annealing_factor=annealing_factor,
+            )
+            new_Sigma = scipy.optimize.newton_krylov(
+                F, Sigma, verbose=False, f_tol=5e-4, maxiter=100, inner_maxiter=100
+            )
 
             if isinstance(new_Sigma, np.ndarray):
                 new_Sigma = torch.Tensor(new_Sigma)
-            self.tracker.store_Sigma(Sigma=new_Sigma, step=self.optim_step)
             new_Q1 = self.getQ1(Sigma=new_Sigma, X=X_train)
             fbar = self.getfbar(y_train=y_train, Q1=new_Q1)
             # self.tracker.plot_fbar(fbar=fbar, name="fbar_{}".format(self.optim_step))
             Sigma = new_Sigma
             Q1 = new_Q1
 
-            self.tracker.compute_and_store_Q1_nc1(
-                Q1=Q1.detach(),
-                class_sizes=training_data.class_sizes,
-                step=self.optim_step,
-            )
-            self.tracker.compute_and_store_fbar_kernel_nc1(
-                fbar=fbar.detach(),
-                class_sizes=training_data.class_sizes,
-                step=self.optim_step,
-            )
-            loss = self.compute_loss(fbar=fbar, y_train=y_train)
-            # print(loss)
-            self.tracker.store_loss(loss=loss, step=self.optim_step)
-            self.tracker.plot_step_loss()
-            self.tracker.plot_Q1_nc1()
-            self.tracker.plot_fbar_kernel_nc1()
-            self.tracker.plot_Sigma_trace()
+            if not self.lightweight:
+                self.tracker.store_Sigma(Sigma=new_Sigma, step=self.optim_step)
+                self.tracker.compute_and_store_Q1_nc1(
+                    Q1=Q1.detach(),
+                    class_sizes=training_data.class_sizes,
+                    step=self.optim_step,
+                )
+                self.tracker.compute_and_store_fbar_kernel_nc1(
+                    fbar=fbar.detach(),
+                    class_sizes=training_data.class_sizes,
+                    step=self.optim_step,
+                )
+                loss = self.compute_loss(fbar=fbar, y_train=y_train)
+                # print(loss)
+                self.tracker.store_loss(loss=loss, step=self.optim_step)
+                self.tracker.plot_step_loss()
+                self.tracker.plot_Q1_nc1()
+                self.tracker.plot_fbar_kernel_nc1()
+                self.tracker.plot_Sigma_trace()
 
-        self.tracker.plot_initial_final_Q1()
-        self.tracker.plot_initial_final_fbar_kernel()
-        self.tracker.plot_fbar(fbar=fbar, name="fbar_final")
-        self.tracker.plot_initial_final_Sigma()
-        self.tracker.plot_Sigma_svd()
+        if not self.lightweight:
+            self.tracker.plot_initial_final_Q1()
+            self.tracker.plot_initial_final_fbar_kernel()
+            self.tracker.plot_fbar(fbar=fbar, name="fbar_final")
+            self.tracker.plot_initial_final_Sigma()
+            self.tracker.plot_Sigma_svd()
+
+        return Q1

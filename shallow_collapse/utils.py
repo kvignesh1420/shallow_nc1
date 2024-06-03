@@ -16,7 +16,7 @@ data_cls_map = {
 }
 
 
-def get_exp_context():
+def parse_config():
     parser = argparse.ArgumentParser(
         description="Arguments for running the experiments"
     )

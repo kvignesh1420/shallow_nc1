@@ -504,3 +504,50 @@ class EoSTracker:
         plt.tight_layout()
         plt.savefig("{}mse_loss.jpg".format(self.context["vis_dir"]))
         plt.clf()
+
+
+class BulkBalancedTracker:
+    @staticmethod
+    def prepare_res_info(IN_FEATURES_LIST, info):
+        res_info = []
+        for in_features in IN_FEATURES_LIST:
+            mean_nc1 = np.mean(info[in_features])
+            std_nc1 = np.std(info[in_features])
+            # intervals for plotting
+            lower_nc1 = mean_nc1 - std_nc1
+            upper_nc1 = mean_nc1 + std_nc1
+            res_info.append(
+                {
+                    "d": in_features,
+                    "val": mean_nc1,
+                    "lower": lower_nc1,
+                    "upper": upper_nc1,
+                }
+            )
+        return res_info
+
+    @staticmethod
+    def plot_dfs(dfs, N_LIST, name, context):
+        fig, ax = plt.subplots()
+        for N, df in zip(N_LIST, dfs):
+            ax.plot(df["d"], df["val"], marker="o", label=f"N={N}")
+            ax.set(xlabel="$d_0$")
+            ax.set(ylabel="$\log_{10}(NC1(H))$")
+            ax.fill_between(df["d"], df.lower, df.upper, alpha=0.4)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}{}".format(context["vis_dir"], name))
+        plt.clf()
+
+    @staticmethod
+    def plot_rel_dfs(dfs, N_LIST, name, context):
+        fig, ax = plt.subplots()
+        for N, df in zip(N_LIST, dfs):
+            ax.plot(df["d"], df["val"], marker="o", label=f"N={N}")
+            ax.set(xlabel="$d_0$")
+            ax.set(ylabel="$\log_{10}(NC1(H)/NC1(X))$")
+            ax.fill_between(df["d"], df.lower, df.upper, alpha=0.4)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}{}".format(context["vis_dir"], name))
+        plt.clf()
