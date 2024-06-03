@@ -9,7 +9,7 @@ import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sns.set_style("darkgrid")
+sns.set_style("dark")
 import seaborn_image as isns
 
 plt.rcParams.update(
@@ -284,4 +284,223 @@ class MetricTracker:
         plt.imshow(diff_kernel.cpu(), cmap="viridis")
         plt.colorbar()
         plt.savefig(name)
+        plt.clf()
+
+
+class EoSTracker:
+    def __init__(self, context):
+        self.context = context
+        self.N = self.context["N"]
+        self.step_Sigma = OrderedDict()
+        self.step_Q1 = OrderedDict()
+        self.step_fbar_kernel = OrderedDict()
+        self.step_Q1_nc1 = OrderedDict()
+        self.step_Q1_nc1_bounds = OrderedDict()
+        self.step_fbar_nc1 = OrderedDict()
+        self.step_loss = OrderedDict()
+
+    def plot_kernel(self, K, name):
+        if isinstance(K, torch.Tensor):
+            K = K.detach().numpy()
+
+        isns.imgplot(K, cmap="viridis", cbar=True, showticks=True)
+        plt.tight_layout()
+        plt.savefig("{}{}_kernel.jpg".format(self.context["vis_dir"], name))
+        plt.clf()
+
+    def plot_kernel_sv(self, K, name):
+        if isinstance(K, torch.Tensor):
+            K = K.detach().numpy()
+        _, S, _ = np.linalg.svd(K)
+        plt.plot(S)
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}{}_kernel_sv.jpg".format(self.context["vis_dir"], name))
+        plt.clf()
+
+    def plot_fbar(self, fbar, name):
+        plt.plot(fbar.detach().numpy(), marker="o")
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}{}.jpg".format(self.context["vis_dir"], name))
+        plt.clf()
+
+    def store_Sigma(self, Sigma, step):
+        self.step_Sigma[step] = Sigma.detach()
+
+    def plot_initial_final_Sigma_esd(self):
+        steps = list(self.step_Sigma.keys())
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_Sigma = self.step_Sigma[initial_step]
+        final_Sigma = self.step_Sigma[final_step]
+        Ui, Si, Vhi = torch.linalg.svd(initial_Sigma, full_matrices=False)
+        Uf, Sf, Vhf = torch.linalg.svd(final_Sigma, full_matrices=False)
+        plt.hist(Si.detach().numpy(), bins=100, label="initial")
+        plt.legend()
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}initial_Sigma_esd.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+        plt.hist(Sf.detach().numpy(), bins=100, label="step{}".format(final_step))
+        plt.legend()
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}final_Sigma_esd.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_initial_final_Sigma(self):
+        steps = list(self.step_Sigma.keys())
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_Sigma = self.step_Sigma[initial_step]
+        final_Sigma = self.step_Sigma[final_step]
+        self.plot_kernel(K=initial_Sigma, name="Sigma_step{}".format(initial_step))
+        self.plot_kernel(K=final_Sigma, name="Sigma_step{}".format(final_step))
+        self.plot_kernel(K=final_Sigma - initial_Sigma, name="Sigma_diff")
+
+    def plot_Sigma_trace(self):
+        steps = list(self.step_Sigma.keys())
+        Sigmas = list(self.step_Sigma.values())
+        traces = np.array([torch.trace(Sigma) for Sigma in Sigmas])
+        plt.plot(steps, traces, marker="o")
+        plt.xlabel("steps")
+        plt.ylabel("Tr(Sigma)")
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}Sigma_traces.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_Sigma_svd(self):
+        steps = list(self.step_Sigma.keys())
+        Sigmas = list(self.step_Sigma.values())
+
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_cov = Sigmas[0]
+        initial_S = torch.linalg.svdvals(initial_cov)
+        initial_S /= torch.max(initial_S)
+
+        final_cov = Sigmas[-1]
+        final_S = torch.linalg.svdvals(final_cov)
+        final_S /= torch.max(final_S)
+
+        plt.hist(initial_S, bins=100, label="init")
+        plt.hist(final_S, bins=100, label="final".format(final_step), alpha=0.5)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}Sigma_svd_hist.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+        plt.plot(initial_S, label="init".format(initial_step))
+        plt.plot(final_S, label="final".format(final_step))
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("{}Sigma_svd_plot.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def compute_and_store_data_kernel_nc1(self, X_train, class_sizes):
+        # NC1 of data
+        K = X_train @ X_train.t()
+        self.data_nc1 = NCProbe.compute_kernel_nc1(
+            K=K.detach(), N=self.N, class_sizes=class_sizes
+        )
+        logging.info("data nc1: {}".format(self.data_nc1))
+        self.plot_kernel(K=K, name="data")
+
+    def compute_and_store_Q1_nc1(self, Q1, class_sizes, step):
+        # NC1 of Q1
+        self.step_Q1[step] = Q1
+        nc1 = NCProbe.compute_kernel_nc1(
+            K=Q1.detach(), N=self.N, class_sizes=class_sizes
+        )
+        self.step_Q1_nc1[step] = nc1
+        # Theoretical bounds
+        # nc1_bounds = NCProbe.compute_kernel_nc1_bounds(K=Q1.detach(), N=self.N, class_sizes=class_sizes)
+        # self.step_Q1_nc1_bounds[step] = nc1_bounds
+
+    def compute_and_store_fbar_kernel_nc1(self, fbar, class_sizes, step):
+        # NC1 of fbar kernel
+        K = fbar @ fbar.t()
+        self.step_fbar_kernel[step] = K
+        nc1 = NCProbe.compute_kernel_nc1(
+            K=K.detach(), N=self.N, class_sizes=class_sizes
+        )
+        self.step_fbar_nc1[step] = nc1
+
+    def plot_initial_final_Q1(self):
+        steps = list(self.step_Q1.keys())
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_Q1 = self.step_Q1[initial_step]
+        final_Q1 = self.step_Q1[final_step]
+        self.plot_kernel(K=initial_Q1, name="Q1_step{}".format(initial_step))
+        self.plot_kernel(K=final_Q1, name="Q1_step{}".format(final_step))
+        self.plot_kernel(K=final_Q1 - initial_Q1, name="Q1_diff")
+
+    def plot_initial_final_fbar_kernel(self):
+        steps = list(self.step_fbar_kernel.keys())
+        initial_step = steps[0]
+        final_step = steps[-1]
+        initial_fbar_kernel = self.step_fbar_kernel[initial_step]
+        final_fbar_kernel = self.step_fbar_kernel[final_step]
+        self.plot_kernel(
+            K=initial_fbar_kernel, name="fbar_kernel_step{}".format(initial_step)
+        )
+        self.plot_kernel(
+            K=final_fbar_kernel, name="fbar_kernel_step{}".format(final_step)
+        )
+        self.plot_kernel(
+            K=final_fbar_kernel - initial_fbar_kernel, name="fbar_kernel_diff"
+        )
+
+    def plot_Q1_nc1(self):
+        steps = list(self.step_Q1_nc1.keys())
+        values = list(self.step_Q1_nc1.values())
+        nc1_values = [value["nc1"] for value in values]
+        plt.plot(steps, nc1_values, marker="o", label="trace_S_W_div_S_B")
+        plt.legend()
+        plt.xlabel("step")
+        plt.ylabel("NC1")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("{}Q1_nc1.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+        df = pd.DataFrame(values)
+        for column in ["Tr_Sigma_W", "Tr_Sigma_B"]:
+            df[column].astype(float).plot(label=column)
+        plt.xlabel("step")
+        plt.ylabel("Traces")
+        plt.legend()
+        plt.tight_layout()
+        plt.grid(True)
+        plt.savefig("{}Q1_nc1_traces.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def plot_fbar_kernel_nc1(self):
+        steps = list(self.step_fbar_nc1.keys())
+        values = list(self.step_fbar_nc1.values())
+        values = [value["nc1"] for value in values]
+        plt.plot(steps, values, marker="o", label="trace_S_W_div_S_B")
+        plt.legend()
+        plt.xlabel("step")
+        plt.ylabel("NC1")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("{}fbar_nc1.jpg".format(self.context["vis_dir"]))
+        plt.clf()
+
+    def store_loss(self, loss, step):
+        self.step_loss[step] = loss
+
+    def plot_step_loss(self):
+        steps = list(self.step_loss.keys())
+        values = list(self.step_loss.values())
+        plt.plot(steps, values, marker="o")
+        plt.xlabel("step")
+        plt.ylabel("mse")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("{}mse_loss.jpg".format(self.context["vis_dir"]))
         plt.clf()
