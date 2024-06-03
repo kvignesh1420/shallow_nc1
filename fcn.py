@@ -5,13 +5,11 @@ from shallow_collapse.model import MLPModel
 from shallow_collapse.tracker import MetricTracker
 from shallow_collapse.trainer import Trainer
 
-from shallow_collapse.utils import setup_runtime_context
-from shallow_collapse.utils import data_cls_map
-from shallow_collapse.utils import get_exp_context
+from shallow_collapse.utils import setup_runtime_context, data_cls_map, parse_config
 
 
 def main():
-    exp_context = get_exp_context()
+    exp_context = parse_config()
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
         filename=context["results_file"],
