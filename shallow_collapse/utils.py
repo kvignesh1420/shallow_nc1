@@ -83,8 +83,8 @@ def setup_runtime_context(context):
     context["data_dir"] = "data/{}".format(data_config_uuid)
     os.makedirs(context["data_dir"], exist_ok=True)
     # model
-    if context.get("name", "") != "adaptive_kernels":
-        print("skipping model_dir conf for adaptive kernels")
+    if "adaptive_kernels" not in context.get("name", ""):
+        # print("skipping model_dir conf for adaptive kernels")
         model_config_uuid = prepare_model_hash(context=context)
         context["model_dir"] = "models/{}".format(model_config_uuid)
         os.makedirs(context["model_dir"], exist_ok=True)

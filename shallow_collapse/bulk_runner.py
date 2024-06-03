@@ -176,16 +176,13 @@ class _BulkImbalancedRunner:
     def get_fig_suffix(self):
         fig_activation = self._context["activation"]
         fig_L = self._context["L"]
-        fig_N = self._context["N"]
         fig_C = self._context["num_classes"]
         fig_h = self._context["hidden_features"]
         fig_mu = abs(self._context["class_means"][0])
         fig_std = abs(self._context["class_stds"][0])
 
-        fig_suffix = (
-            "{}_nonlin_{}_h_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(
-                self.kind, fig_activation, fig_h, fig_mu, fig_std, fig_L, fig_N, fig_C
-            )
+        fig_suffix = "{}_nonlin_{}_h_{}_mu_{}_std_{}_L_{}_C_{}_imbalanced.jpg".format(
+            self.kind, fig_activation, fig_h, fig_mu, fig_std, fig_L, fig_C
         )
         return fig_suffix
 

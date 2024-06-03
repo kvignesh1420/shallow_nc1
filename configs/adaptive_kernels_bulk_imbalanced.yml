@@ -1,4 +1,4 @@
-name: adaptive_kernels
+name: adaptive_kernels_bulk_imbalanced
 lightweight: true
 use_cache: false
 training_data_cls: Gaussian2DNL
