@@ -1,7 +1,7 @@
 name: adaptive_kernels
 lightweight: false
 use_cache: true
-training_data_cls: Gaussian2DNL
+training_data_cls: GaussiandD2NL
 # note that the mean/std values will be broadcasted across `in_features`
 class_means:
   - -2

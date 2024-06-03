@@ -7,11 +7,11 @@ import json
 import yaml
 import argparse
 import hashlib
-from shallow_collapse.data import Gaussian2DNL
+from shallow_collapse.data import GaussiandD2NL
 from shallow_collapse.data import GaussiandD4NL
 
 data_cls_map = {
-    "Gaussian2DNL": Gaussian2DNL,
+    "GaussiandD2NL": GaussiandD2NL,
     "GaussiandD4NL": GaussiandD4NL,
 }
 

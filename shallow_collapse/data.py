@@ -166,7 +166,7 @@ class GaussiandD:
         plt.close()
 
 
-class Gaussian2DNL(GaussiandD):
+class GaussiandD2NL(GaussiandD):
     def __init__(self, context) -> None:
         super().__init__(context=context)
         assert context["num_classes"] == 2
