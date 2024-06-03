@@ -4,11 +4,15 @@ from collections import defaultdict
 import logging
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    'font.size': 18,
-    'axes.linewidth': 2,
-})
+
+plt.rcParams.update(
+    {
+        "font.size": 18,
+        "axes.linewidth": 2,
+    }
+)
 import seaborn as sns
+
 sns.set_style("darkgrid")
 from shallow_collapse.probes import KernelProbe, NCProbe, DataNCProbe
 
@@ -16,6 +20,7 @@ from shallow_collapse.utils import setup_runtime_context
 from shallow_collapse.utils import data_cls_map
 
 TAU = 1e-8
+
 
 def prepare_res_data(IN_FEATURES_LIST, data):
     res_data = []
@@ -25,13 +30,16 @@ def prepare_res_data(IN_FEATURES_LIST, data):
         # intervals for plotting
         lower_nc1 = mean_nc1 - std_nc1
         upper_nc1 = mean_nc1 + std_nc1
-        res_data.append({
-            "d": in_features,
-            "val": mean_nc1,
-            "lower": lower_nc1,
-            "upper": upper_nc1,
-        })
+        res_data.append(
+            {
+                "d": in_features,
+                "val": mean_nc1,
+                "lower": lower_nc1,
+                "upper": upper_nc1,
+            }
+        )
     return res_data
+
 
 def plot_dfs(dfs, CLASS_SIZES_LIST, name, context):
     fig, ax = plt.subplots()
@@ -65,27 +73,32 @@ def main():
         # note that the mean/std values will be broadcasted across `in_features`
         "class_means": [-2, 2],
         "class_stds": [0.5, 0.5],
-        "N": 1024*2,
-        "batch_size": 1024*2,
+        "N": 1024 * 2,
+        "batch_size": 1024 * 2,
         "L": 2,
         "out_features": 1,
-        "num_classes" : 2,
+        "num_classes": 2,
         "bias_std": 0,
         "hidden_weight_std": 1,
         "final_weight_std": 1,
         "activation": "erf",
-        "use_cache": False
+        "use_cache": False,
     }
     context = setup_runtime_context(context=base_context)
     logging.basicConfig(
         filename=context["results_file"],
-        filemode='a',
-        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-        level=logging.INFO
+        filemode="a",
+        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+        level=logging.INFO,
     )
     logging.info("context: \n{}".format(context))
 
-    CLASS_SIZES_LIST = [(512*2, 512*2), (384*2, 640*2), (256*2, 768*2), (128*2, 896*2)]
+    CLASS_SIZES_LIST = [
+        (512 * 2, 512 * 2),
+        (384 * 2, 640 * 2),
+        (256 * 2, 768 * 2),
+        (128 * 2, 896 * 2),
+    ]
     IN_FEATURES_LIST = [1, 2, 8, 32, 128]
     REPEAT = 10
 
@@ -97,7 +110,7 @@ def main():
     for class_sizes in tqdm(CLASS_SIZES_LIST):
         nngp_act_nc1_data = defaultdict(list)
         nngp_act_rel_nc1_data = defaultdict(list)
-        
+
         ntk_nc1_data = defaultdict(list)
         ntk_rel_nc1_data = defaultdict(list)
 
@@ -107,9 +120,13 @@ def main():
             context["class_sizes"] = class_sizes
             assert sum(class_sizes) == N
             for _ in range(REPEAT):
-                training_data = data_cls_map[context["training_data_cls"]](context=context)
+                training_data = data_cls_map[context["training_data_cls"]](
+                    context=context
+                )
                 data_nc_probe = DataNCProbe(context=context)
-                training_data_nc1 = data_nc_probe.capture(training_data=training_data)[-1]["trace_S_W_div_S_B"]
+                training_data_nc1 = data_nc_probe.capture(training_data=training_data)[
+                    -1
+                ]["trace_S_W_div_S_B"]
 
                 kernel_probe = KernelProbe(context=context)
                 kernel_probe.compute_lim_nngp_kernels(training_data=training_data)
@@ -119,27 +136,45 @@ def main():
                 # we focus only on L=2 as of now
                 assert len(nngp_act_kernels) == 1
                 nngp_act_kernel = nngp_act_kernels[0]
-                nngp_act_kernel_nc1 = NCProbe.compute_kernel_nc1(K=nngp_act_kernel, N=N, class_sizes=training_data.class_sizes)["nc1"]
+                nngp_act_kernel_nc1 = NCProbe.compute_kernel_nc1(
+                    K=nngp_act_kernel, N=N, class_sizes=training_data.class_sizes
+                )["nc1"]
                 if not np.isnan(np.log10(nngp_act_kernel_nc1)):
-                    nngp_act_nc1_data[in_features].append( np.log10(nngp_act_kernel_nc1))
-                if not np.isnan( np.log10( nngp_act_kernel_nc1/(training_data_nc1 + TAU) ) ):
-                    nngp_act_rel_nc1_data[in_features].append(  np.log10( nngp_act_kernel_nc1/(training_data_nc1 + TAU) ) )
+                    nngp_act_nc1_data[in_features].append(np.log10(nngp_act_kernel_nc1))
+                if not np.isnan(
+                    np.log10(nngp_act_kernel_nc1 / (training_data_nc1 + TAU))
+                ):
+                    nngp_act_rel_nc1_data[in_features].append(
+                        np.log10(nngp_act_kernel_nc1 / (training_data_nc1 + TAU))
+                    )
 
                 ntk_kernels = kernel_probe.ntk_kernels
                 assert len(ntk_kernels) == 2
                 # choose the second kernel and the first one is the same as nngp
                 ntk_kernel = ntk_kernels[1]
-                ntk_kernel_nc1 = NCProbe.compute_kernel_nc1(K=ntk_kernel, N=N, class_sizes=training_data.class_sizes)["nc1"]
+                ntk_kernel_nc1 = NCProbe.compute_kernel_nc1(
+                    K=ntk_kernel, N=N, class_sizes=training_data.class_sizes
+                )["nc1"]
                 if not np.isnan(np.log10(ntk_kernel_nc1)):
                     ntk_nc1_data[in_features].append(np.log10(ntk_kernel_nc1))
-                if not np.isnan(  np.log10( ntk_kernel_nc1/(training_data_nc1 + TAU) )):
-                    ntk_rel_nc1_data[in_features].append(  np.log10( ntk_kernel_nc1/(training_data_nc1 + TAU) ) )
+                if not np.isnan(np.log10(ntk_kernel_nc1 / (training_data_nc1 + TAU))):
+                    ntk_rel_nc1_data[in_features].append(
+                        np.log10(ntk_kernel_nc1 / (training_data_nc1 + TAU))
+                    )
 
-        nngp_act_res_data = prepare_res_data(IN_FEATURES_LIST=IN_FEATURES_LIST, data=nngp_act_nc1_data)
-        nngp_act_rel_res_data = prepare_res_data(IN_FEATURES_LIST=IN_FEATURES_LIST, data=nngp_act_rel_nc1_data)
+        nngp_act_res_data = prepare_res_data(
+            IN_FEATURES_LIST=IN_FEATURES_LIST, data=nngp_act_nc1_data
+        )
+        nngp_act_rel_res_data = prepare_res_data(
+            IN_FEATURES_LIST=IN_FEATURES_LIST, data=nngp_act_rel_nc1_data
+        )
 
-        ntk_res_data = prepare_res_data(IN_FEATURES_LIST=IN_FEATURES_LIST, data=ntk_nc1_data)
-        ntk_rel_res_data = prepare_res_data(IN_FEATURES_LIST=IN_FEATURES_LIST, data=ntk_rel_nc1_data)
+        ntk_res_data = prepare_res_data(
+            IN_FEATURES_LIST=IN_FEATURES_LIST, data=ntk_nc1_data
+        )
+        ntk_rel_res_data = prepare_res_data(
+            IN_FEATURES_LIST=IN_FEATURES_LIST, data=ntk_rel_nc1_data
+        )
 
         nngp_act_df = pd.DataFrame(nngp_act_res_data)
         nngp_act_rel_df = pd.DataFrame(nngp_act_rel_res_data)
@@ -160,15 +195,40 @@ def main():
     fig_mu = abs(context["class_means"][0])
     fig_std = abs(context["class_stds"][0])
 
-    plot_dfs(dfs=nngp_act_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
-             name="nngp_act_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(activation, fig_mu, fig_std, fig_L, fig_N, fig_C), context=context)
-    plot_rel_dfs(dfs=nngp_act_rel_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
-                 name="nngp_act_rel_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(activation, fig_mu, fig_std, fig_L, fig_N, fig_C), context=context)
+    plot_dfs(
+        dfs=nngp_act_dfs,
+        CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+        name="nngp_act_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(
+            activation, fig_mu, fig_std, fig_L, fig_N, fig_C
+        ),
+        context=context,
+    )
+    plot_rel_dfs(
+        dfs=nngp_act_rel_dfs,
+        CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+        name="nngp_act_rel_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(
+            activation, fig_mu, fig_std, fig_L, fig_N, fig_C
+        ),
+        context=context,
+    )
 
-    plot_dfs(dfs=ntk_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
-             name="ntk_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(activation, fig_mu, fig_std, fig_L, fig_N, fig_C), context=context)
-    plot_rel_dfs(dfs=ntk_rel_dfs, CLASS_SIZES_LIST=CLASS_SIZES_LIST,
-                 name="ntk_rel_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(activation, fig_mu, fig_std, fig_L, fig_N, fig_C), context=context)
+    plot_dfs(
+        dfs=ntk_dfs,
+        CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+        name="ntk_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(
+            activation, fig_mu, fig_std, fig_L, fig_N, fig_C
+        ),
+        context=context,
+    )
+    plot_rel_dfs(
+        dfs=ntk_rel_dfs,
+        CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+        name="ntk_rel_nc1_{}_mu_{}_std_{}_L_{}_N_{}_C_{}_imbalanced.jpg".format(
+            activation, fig_mu, fig_std, fig_L, fig_N, fig_C
+        ),
+        context=context,
+    )
+
 
 if __name__ == "__main__":
     main()

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from typing import Dict, Any
 
+
 class Erf(torch.nn.Module):
     r"""Applies the erf function element-wise:
 
@@ -23,10 +24,8 @@ class Erf(torch.nn.Module):
         return torch.special.erf(input)
 
 
-activation_cls_map = {
-    "relu": torch.nn.ReLU,
-    "erf": Erf
-}
+activation_cls_map = {"relu": torch.nn.ReLU, "erf": Erf}
+
 
 class MLPModel(torch.nn.Module):
     """
@@ -34,7 +33,8 @@ class MLPModel(torch.nn.Module):
     Args:
         context: Dictionary of model training parameters
     """
-    def __init__(self, context : Dict[str, Any]) -> None:
+
+    def __init__(self, context: Dict[str, Any]) -> None:
         super().__init__()
         self.L = context["L"]
         self.in_features = context["in_features"]
@@ -56,36 +56,43 @@ class MLPModel(torch.nn.Module):
 
     def _initialize_layers(self):
         self.first_layer = torch.nn.Linear(
-            in_features=self.in_features,
-            out_features=self.hidden_features,
-            bias=True
+            in_features=self.in_features, out_features=self.hidden_features, bias=True
         )
-        torch.nn.init.normal_(self.first_layer.weight, std=(self.hidden_weight_std/np.sqrt(self.in_features)))
+        torch.nn.init.normal_(
+            self.first_layer.weight,
+            std=(self.hidden_weight_std / np.sqrt(self.in_features)),
+        )
         torch.nn.init.normal_(self.first_layer.bias, std=self.bias_std)
         self.hidden_layers = [self.first_layer]
         self.activation_layers = [self.activation_cls()]
         if self.use_batch_norm:
             self.normalization_layers = [torch.nn.BatchNorm1d(self.hidden_features)]
 
-        for l in range(1, self.L-1):
+        for l in range(1, self.L - 1):
             layer = torch.nn.Linear(
                 in_features=self.hidden_features,
                 out_features=self.hidden_features,
-                bias=True
+                bias=True,
             )
-            torch.nn.init.normal_(layer.weight, std=(self.hidden_weight_std/np.sqrt(self.hidden_features)))
+            torch.nn.init.normal_(
+                layer.weight,
+                std=(self.hidden_weight_std / np.sqrt(self.hidden_features)),
+            )
             torch.nn.init.normal_(layer.bias, std=self.bias_std)
             self.hidden_layers.append(layer)
             self.activation_layers.append(self.activation_cls())
             if self.use_batch_norm:
-                self.normalization_layers.append(torch.nn.BatchNorm1d(self.hidden_features))
+                self.normalization_layers.append(
+                    torch.nn.BatchNorm1d(self.hidden_features)
+                )
 
         self.final_layer = torch.nn.Linear(
-            in_features=self.hidden_features,
-            out_features=self.out_features,
-            bias=True
+            in_features=self.hidden_features, out_features=self.out_features, bias=True
         )
-        torch.nn.init.normal_(self.final_layer.weight, std=(self.final_weight_std/np.sqrt(self.hidden_features)))
+        torch.nn.init.normal_(
+            self.final_layer.weight,
+            std=(self.final_weight_std / np.sqrt(self.hidden_features)),
+        )
         torch.nn.init.normal_(self.final_layer.bias, std=self.bias_std)
         self.hidden_layers.append(self.final_layer)
         self.activation_layers.append(torch.nn.Identity())
@@ -99,12 +106,14 @@ class MLPModel(torch.nn.Module):
     def _probe_affine_features(self, idx):
         def hook(model, inp, out):
             self.affine_features[idx] = out.detach()
+
         return hook
 
     @torch.no_grad()
     def _probe_activation_features(self, idx):
         def hook(model, inp, out):
             self.activation_features[idx] = out.detach()
+
         return hook
 
     @torch.no_grad()
@@ -120,13 +129,13 @@ class MLPModel(torch.nn.Module):
                 self._probe_activation_features(idx=layer_idx)
             )
 
-    def forward(self, x : torch.Tensor) -> torch.Tensor:
-        for l in range(self.L-1):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for l in range(self.L - 1):
             x = self.hidden_layers[l](x)
             if self.use_batch_norm:
                 x = self.normalization_layers[l](x)
             x = self.activation_layers[l](x)
 
-        x = self.hidden_layers[self.L-1](x)
-        x = self.activation_layers[self.L-1](x)
+        x = self.hidden_layers[self.L - 1](x)
+        x = self.activation_layers[self.L - 1](x)
         return x

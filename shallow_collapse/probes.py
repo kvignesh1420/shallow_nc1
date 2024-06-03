@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 from collections import OrderedDict
 import torch
@@ -7,8 +8,10 @@ from torch_scatter import scatter
 PLACEHOLDER_LAYER_ID = -1
 EPSILON = 1e-10
 
-class WeightProbe():
+
+class WeightProbe:
     """Probe weight matrix statistics."""
+
     def __init__(self, context) -> None:
         self.context = context
 
@@ -23,10 +26,12 @@ class WeightProbe():
             data[idx]["cov"] = C
         return data
 
-class NCProbe():
+
+class NCProbe:
     """
     Probe NC metrics when training in a mini-batch fashion.
     """
+
     def __init__(self, context) -> None:
         self.context = context
         self.num_classes = self.context["num_classes"]
@@ -53,11 +58,13 @@ class NCProbe():
             feat_shape: int
         """
         if layer_idx not in self.layerwise_class_sums:
-            self.layerwise_class_sums[layer_idx] = torch.zeros((self.num_classes, feat_size)).to(self.context["device"])
+            self.layerwise_class_sums[layer_idx] = torch.zeros(
+                (self.num_classes, feat_size)
+            ).to(self.context["device"])
         if layer_idx not in self.layerwise_class_cov:
             self.layerwise_class_cov[layer_idx] = {
                 "S_W": torch.zeros((feat_size, feat_size)).to(self.context["device"]),
-                "S_B": torch.zeros((feat_size, feat_size)).to(self.context["device"])
+                "S_B": torch.zeros((feat_size, feat_size)).to(self.context["device"]),
             }
 
     def _track_sums(self, features, labels):
@@ -76,14 +83,17 @@ class NCProbe():
     def _compute_means(self):
         self.layerwise_class_means = {}
         for layer_idx in self.layerwise_class_sums.keys():
-            self.layerwise_global_sum[layer_idx] = torch.sum(self.layerwise_class_sums[layer_idx], dim=0)
-            self.layerwise_global_mean[layer_idx] = self.layerwise_global_sum[layer_idx]/torch.sum(self.class_sizes)
+            self.layerwise_global_sum[layer_idx] = torch.sum(
+                self.layerwise_class_sums[layer_idx], dim=0
+            )
+            self.layerwise_global_mean[layer_idx] = self.layerwise_global_sum[
+                layer_idx
+            ] / torch.sum(self.class_sizes)
             # print(self.layerwise_class_sums[layer_idx].shape, self.class_sizes.shape)
             self.layerwise_class_means[layer_idx] = torch.div(
                 self.layerwise_class_sums[layer_idx].to(self.context["device"]),
-                self.class_sizes.unsqueeze(1).to(self.context["device"])
+                self.class_sizes.unsqueeze(1).to(self.context["device"]),
             )
-
 
     def _track_cov(self, features, labels):
         """
@@ -124,12 +134,16 @@ class NCProbe():
                 nc1 = torch.ones(1).to(self.context["device"])[0]
                 logger.error("Exception raised while computing NC1: {}".format(str(e)))
 
-            nc1_hat = torch.trace(S_W)/torch.trace(S_B)
+            nc1_hat = torch.trace(S_W) / torch.trace(S_B)
             nc1_metrics[layer_idx] = {}
             nc1_metrics[layer_idx]["trace_S_W_pinv_S_B"] = nc1.detach().cpu().numpy()
             nc1_metrics[layer_idx]["trace_S_W_div_S_B"] = nc1_hat.detach().cpu().numpy()
-            nc1_metrics[layer_idx]["trace_S_W"] = torch.trace(S_W).detach().cpu().numpy()
-            nc1_metrics[layer_idx]["trace_S_B"] = torch.trace(S_B).detach().cpu().numpy()
+            nc1_metrics[layer_idx]["trace_S_W"] = (
+                torch.trace(S_W).detach().cpu().numpy()
+            )
+            nc1_metrics[layer_idx]["trace_S_B"] = (
+                torch.trace(S_B).detach().cpu().numpy()
+            )
         return nc1_metrics
 
     @torch.no_grad()
@@ -152,7 +166,11 @@ class NCProbe():
             model.zero_grad()
             data, y, labels = data.to(device), y.to(device), labels.to(device)
             _ = model(data)
-            features = model.activation_features if layer_type == "activation" else model.affine_features
+            features = (
+                model.activation_features
+                if layer_type == "activation"
+                else model.affine_features
+            )
             self._track_sums(features=features, labels=labels.type(torch.int64))
         self._compute_means()
         # second-pass to compute covariance matrices
@@ -160,7 +178,11 @@ class NCProbe():
             model.zero_grad()
             data, y, labels = data.to(device), y.to(device), labels.to(device)
             _ = model(data)
-            features = model.activation_features if layer_type == "activation" else model.affine_features
+            features = (
+                model.activation_features
+                if layer_type == "activation"
+                else model.affine_features
+            )
             self._track_cov(features=features, labels=labels.type(torch.int64))
         self._compute_cov()
         nc_metrics = self.compute_nc1()
@@ -187,16 +209,18 @@ class NCProbe():
         class_block_sums = OrderedDict()
         for c in range(num_classes):
             class_size = class_sizes[c]
-            block_sum = torch.sum( K[x_idx : x_idx + class_size, x_idx : x_idx + class_size] )
+            block_sum = torch.sum(
+                K[x_idx : x_idx + class_size, x_idx : x_idx + class_size]
+            )
             class_block_sums[c] = block_sum
             x_idx += class_size
 
         logger.info("class block sums: {}".format(class_block_sums))
-        Tr_Sigma_G = torch.sum(K)/(N**2)
+        Tr_Sigma_G = torch.sum(K) / (N**2)
         Tr_Sigma_tilde_T = torch.sum(torch.diag(K)) / N
         Tr_Sigma_tilde_B = 0
         for c in range(num_classes):
-            Tr_Sigma_tilde_B += class_block_sums[c]/(class_sizes[c]**2)
+            Tr_Sigma_tilde_B += class_block_sums[c] / (class_sizes[c] ** 2)
         Tr_Sigma_tilde_B /= num_classes
 
         Tr_Sigma_W = Tr_Sigma_tilde_T - Tr_Sigma_tilde_B
@@ -207,11 +231,13 @@ class NCProbe():
         return {
             "Tr_Sigma_W": Tr_Sigma_W.detach().cpu().numpy(),
             "Tr_Sigma_B": Tr_Sigma_B.detach().cpu().numpy(),
-            "nc1": (Tr_Sigma_W/Tr_Sigma_B).detach().cpu().numpy()
+            "nc1": (Tr_Sigma_W / Tr_Sigma_B).detach().cpu().numpy(),
         }
 
     @staticmethod
-    def compute_kernel_nc1_bounds(K: torch.Tensor, N: int, class_sizes: torch.Tensor) -> dict:
+    def compute_kernel_nc1_bounds(
+        K: torch.Tensor, N: int, class_sizes: torch.Tensor
+    ) -> dict:
         """Compute the lower and upper bounds for the covariance traces.
 
         Make sure that the kernel matrix is ordered in blocks. The default
@@ -231,26 +257,35 @@ class NCProbe():
         class_kernels_normalized_smallest_svdvals = OrderedDict()
         for c in range(num_classes):
             class_size = class_sizes[c]
-            class_kernel = ( K[x_idx : x_idx + class_size, x_idx : x_idx + class_size] ).clone().detach()
+            class_kernel = (
+                (K[x_idx : x_idx + class_size, x_idx : x_idx + class_size])
+                .clone()
+                .detach()
+            )
             class_kernels[c] = class_kernel
             class_svdvals = torch.linalg.svdvals(class_kernel)
-            class_kernels_normalized_smallest_svdvals[c] = torch.min(class_svdvals)/class_size
+            class_kernels_normalized_smallest_svdvals[c] = (
+                torch.min(class_svdvals) / class_size
+            )
             x_idx += class_size
 
         kernel_trace = torch.trace(K)
         kernel_svdvals = torch.linalg.svdvals(K)
         kernel_smallest_svdval = torch.min(kernel_svdvals)
 
-        block_small_svs = torch.Tensor(list(class_kernels_normalized_smallest_svdvals.values()))
-        scaled_block_small_sv_sum = (1/num_classes)*torch.sum(block_small_svs)
-        Tr_Sigma_W_ub = kernel_trace/N - scaled_block_small_sv_sum
-        Tr_Sigma_B_lb = -Tr_Sigma_W_ub + ((N-1)/N)*kernel_smallest_svdval
+        block_small_svs = torch.Tensor(
+            list(class_kernels_normalized_smallest_svdvals.values())
+        )
+        scaled_block_small_sv_sum = (1 / num_classes) * torch.sum(block_small_svs)
+        Tr_Sigma_W_ub = kernel_trace / N - scaled_block_small_sv_sum
+        Tr_Sigma_B_lb = -Tr_Sigma_W_ub + ((N - 1) / N) * kernel_smallest_svdval
         return {
             "Tr_Sigma_W_ub": Tr_Sigma_W_ub.detach().numpy(),
             "Tr_Sigma_B_lb": Tr_Sigma_B_lb.detach().numpy(),
-            "kernel_trace/N": (kernel_trace/N).detach().numpy(),
+            "kernel_trace/N": (kernel_trace / N).detach().numpy(),
             "scaled_block_small_sv_sum": scaled_block_small_sv_sum.detach().numpy(),
-            "scaled_kernel_small_sv": ((N-1)/N)*kernel_smallest_svdval.detach().numpy(),
+            "scaled_kernel_small_sv": ((N - 1) / N)
+            * kernel_smallest_svdval.detach().numpy(),
         }
 
 
@@ -258,6 +293,7 @@ class DataNCProbe(NCProbe):
     """
     Probe NC metrics of data
     """
+
     def __init__(self, context) -> None:
         super().__init__(context)
 
@@ -274,30 +310,34 @@ class DataNCProbe(NCProbe):
         # one-pass to compute class means
         for data, y, labels in training_data.train_loader:
             data, y, labels = data.to(device), y.to(device), labels.to(device)
-            features = {PLACEHOLDER_LAYER_ID : data}
+            features = {PLACEHOLDER_LAYER_ID: data}
             self._track_sums(features=features, labels=labels.type(torch.int64))
         self._compute_means()
         # second-pass to compute covariance matrices
         for data, y, labels in training_data.train_loader:
             data, y, labels = data.to(device), y.to(device), labels.to(device)
-            features = {PLACEHOLDER_LAYER_ID : data}
+            features = {PLACEHOLDER_LAYER_ID: data}
             self._track_cov(features=features, labels=labels.type(torch.int64))
         self._compute_cov()
         nc_metrics = self.compute_nc1()
         return nc_metrics
 
 
-class KernelProbe():
+class KernelProbe:
     def __init__(self, context) -> None:
         self.context = context
 
     def _nngp_erf_kernel_helper(self, nngp_kernel):
-        diag_vector = torch.diag(nngp_kernel) # returns a vector with diag elements
-        scaled_diag_vector = torch.pow(2 * diag_vector + 1, -1/2) # elementise pow of -0.5
-        scaled_diag_matrix = torch.diag(scaled_diag_vector) # convert the vector to a diag matrix
-        coeffs = scaled_diag_matrix @ (2*nngp_kernel) @ scaled_diag_matrix
+        diag_vector = torch.diag(nngp_kernel)  # returns a vector with diag elements
+        scaled_diag_vector = torch.pow(
+            2 * diag_vector + 1, -1 / 2
+        )  # elementise pow of -0.5
+        scaled_diag_matrix = torch.diag(
+            scaled_diag_vector
+        )  # convert the vector to a diag matrix
+        coeffs = scaled_diag_matrix @ (2 * nngp_kernel) @ scaled_diag_matrix
         coeffs = torch.clip(coeffs, min=-1, max=1)
-        nngp_erf_kernel = (2/torch.pi) * torch.arcsin(coeffs)
+        nngp_erf_kernel = (2 / torch.pi) * torch.arcsin(coeffs)
 
         torch.testing.assert_close(nngp_erf_kernel, nngp_erf_kernel.t())
         return nngp_erf_kernel
@@ -310,11 +350,13 @@ class KernelProbe():
         # det(I_2 + 2K)^{-1/2} = ((1+2*K_11)(1+2*K_22) - K_12 K_21)^{-1/2}
 
         diag_vals = torch.diag(nngp_kernel)
-        scaled_diag_vals = 1 + 2*diag_vals
+        scaled_diag_vals = 1 + 2 * diag_vals
         M = scaled_diag_vals @ scaled_diag_vals.t() - 4 * nngp_kernel * nngp_kernel.t()
-        nngp_erf_derivative_kernel = (4/torch.pi)*torch.pow(M, -1/2)
+        nngp_erf_derivative_kernel = (4 / torch.pi) * torch.pow(M, -1 / 2)
         assert not torch.isnan(nngp_erf_derivative_kernel).any()
-        torch.testing.assert_close(nngp_erf_derivative_kernel, nngp_erf_derivative_kernel.t())
+        torch.testing.assert_close(
+            nngp_erf_derivative_kernel, nngp_erf_derivative_kernel.t()
+        )
         return nngp_erf_derivative_kernel
 
     def _nngp_relu_kernel_helper(self, nngp_kernel):
@@ -322,7 +364,7 @@ class KernelProbe():
         diag_vals_sqrt = torch.sqrt(diag_vals)
         diag_matrix_sqrt = torch.diag(diag_vals_sqrt)
 
-        diag_vals_inv_sqrt = torch.pow(diag_vals, -1/2)
+        diag_vals_inv_sqrt = torch.pow(diag_vals, -1 / 2)
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         torch.testing.assert_close(diag_matrix_inv_sqrt, diag_matrix_inv_sqrt.t())
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
@@ -331,26 +373,35 @@ class KernelProbe():
         torch.testing.assert_close(ratios, ratios.t())
         thetas = torch.arccos(ratios)
         # handle numerical precision issues with torch.arccos
-        thetas = (thetas + thetas.t())/2
+        thetas = (thetas + thetas.t()) / 2
         torch.testing.assert_close(thetas, thetas.t())
-        nngp_relu_kernel = diag_matrix_sqrt @ (( torch.sin(thetas) + (torch.pi - thetas)*torch.cos(thetas) )/(2*torch.pi)) @ diag_matrix_sqrt
+        nngp_relu_kernel = (
+            diag_matrix_sqrt
+            @ (
+                (torch.sin(thetas) + (torch.pi - thetas) * torch.cos(thetas))
+                / (2 * torch.pi)
+            )
+            @ diag_matrix_sqrt
+        )
         torch.testing.assert_close(nngp_relu_kernel, nngp_relu_kernel.t())
         return nngp_relu_kernel
 
     def _nngp_relu_derivative_kernel_helper(self, nngp_kernel):
         nngp_relu_derivative_kernel = torch.zeros_like(nngp_kernel)
         diag_vals = torch.diag(nngp_kernel, 0)
-        diag_vals_inv_sqrt = torch.pow(diag_vals, -1/2)
+        diag_vals_inv_sqrt = torch.pow(diag_vals, -1 / 2)
         diag_matrix_inv_sqrt = torch.diag(diag_vals_inv_sqrt)
         ratios = diag_matrix_inv_sqrt @ nngp_kernel @ diag_matrix_inv_sqrt
         ratios = torch.clip(ratios, min=-1, max=1)
         torch.testing.assert_close(ratios, ratios.t())
         thetas = torch.arccos(ratios)
         # handle numerical precision issues with torch.arccos
-        thetas = (thetas + thetas.t())/2
+        thetas = (thetas + thetas.t()) / 2
         torch.testing.assert_close(thetas, thetas.t())
-        nngp_relu_derivative_kernel = (torch.pi - thetas) /(2*torch.pi)
-        torch.testing.assert_close(nngp_relu_derivative_kernel, nngp_relu_derivative_kernel.t())
+        nngp_relu_derivative_kernel = (torch.pi - thetas) / (2 * torch.pi)
+        torch.testing.assert_close(
+            nngp_relu_derivative_kernel, nngp_relu_derivative_kernel.t()
+        )
         return nngp_relu_derivative_kernel
 
     def _nngp_activation_kernel_helper(self, nngp_kernel):
@@ -372,37 +423,64 @@ class KernelProbe():
 
         The recursive formulation is adapted from: https://arxiv.org/pdf/1711.00165.pdf
         """
-        sigma_w_sq = self.context["hidden_weight_std"]**2
-        sigma_b_sq = self.context["bias_std"]**2
+        sigma_w_sq = self.context["hidden_weight_std"] ** 2
+        sigma_b_sq = self.context["bias_std"] ** 2
         L = self.context["L"]
-        X = training_data.X[training_data.perm_inv].to(self.context["device"]) # shape: N x d_0
+        X = training_data.X[training_data.perm_inv].to(
+            self.context["device"]
+        )  # shape: N x d_0
         self.nngp_kernels = {}
         self.nngp_activation_kernels = {}
         # base case
-        self.nngp_kernels[0] = sigma_b_sq + (sigma_w_sq/self.context["in_features"])*(X @ X.t()) # shape: N \times N
-        self.nngp_activation_kernels[0] = self._nngp_activation_kernel_helper(nngp_kernel=self.nngp_kernels[0])
+        self.nngp_kernels[0] = sigma_b_sq + (
+            sigma_w_sq / self.context["in_features"]
+        ) * (
+            X @ X.t()
+        )  # shape: N \times N
+        self.nngp_activation_kernels[0] = self._nngp_activation_kernel_helper(
+            nngp_kernel=self.nngp_kernels[0]
+        )
         # Recursive formulation for subsequent layers.
         # note that we include the final layer as well.
         # The last layers doesn't contain activations so we avoid calculation.
         for l in range(1, L):
-            self.nngp_kernels[l] = sigma_b_sq + sigma_w_sq*self.nngp_activation_kernels[l-1]
-            if l < L-1:
-                self.nngp_activation_kernels[l] = self._nngp_activation_kernel_helper(nngp_kernel=self.nngp_kernels[l])
+            self.nngp_kernels[l] = (
+                sigma_b_sq + sigma_w_sq * self.nngp_activation_kernels[l - 1]
+            )
+            if l < L - 1:
+                self.nngp_activation_kernels[l] = self._nngp_activation_kernel_helper(
+                    nngp_kernel=self.nngp_kernels[l]
+                )
 
     def compute_lim_ntk_kernels(self, training_data):
         if not hasattr(self, "nngp_kernels"):
-            logger.warning("lim NNGP kernels have not been computed. \
-                           Computing them before proceeding.")
+            logger.warning(
+                "lim NNGP kernels have not been computed. \
+                           Computing them before proceeding."
+            )
             self.compute_lim_nngp_kernels(training_data=training_data)
         L = self.context["L"]
-        sigma_w_sq = self.context["hidden_weight_std"]**2
+        sigma_w_sq = self.context["hidden_weight_std"] ** 2
         self.ntk_kernels = {}
         self.nngp_activation_derivative_kernels = {}
         # base case
         self.ntk_kernels[0] = self.nngp_kernels[0]
-        self.nngp_activation_derivative_kernels[0] = self._nngp_activation_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[0])
+        self.nngp_activation_derivative_kernels[0] = (
+            self._nngp_activation_derivative_kernel_helper(
+                nngp_kernel=self.nngp_kernels[0]
+            )
+        )
         # Recursive formulation for subsequent layers.
         for l in range(1, L):
-            self.ntk_kernels[l] = self.nngp_kernels[l] + self.ntk_kernels[l-1] * sigma_w_sq * self.nngp_activation_derivative_kernels[l-1]
-            if l < L-1:
-                self.nngp_activation_derivative_kernels[l] = self._nngp_activation_derivative_kernel_helper(nngp_kernel=self.nngp_kernels[l])
+            self.ntk_kernels[l] = (
+                self.nngp_kernels[l]
+                + self.ntk_kernels[l - 1]
+                * sigma_w_sq
+                * self.nngp_activation_derivative_kernels[l - 1]
+            )
+            if l < L - 1:
+                self.nngp_activation_derivative_kernels[l] = (
+                    self._nngp_activation_derivative_kernel_helper(
+                        nngp_kernel=self.nngp_kernels[l]
+                    )
+                )

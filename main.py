@@ -8,6 +8,7 @@ from shallow_collapse.trainer import Trainer
 from shallow_collapse.utils import setup_runtime_context
 from shallow_collapse.utils import data_cls_map
 
+
 def main():
     exp_context = {
         "training_data_cls": "Gaussian2DNL",
@@ -22,7 +23,7 @@ def main():
         "in_features": 1,
         "hidden_features": 2000,
         "out_features": 1,
-        "num_classes" : 2,
+        "num_classes": 2,
         "use_batch_norm": False,
         "lr": 1e-4,
         "momentum": 0.0,
@@ -35,14 +36,14 @@ def main():
         "probe_kernels": False,
         "probe_weights": True,
         "probing_frequency": 1000,
-        "use_cache": True # set it to False for discarding cache of data and models
+        "use_cache": True,  # set it to False for discarding cache of data and models
     }
     context = setup_runtime_context(context=exp_context)
     logging.basicConfig(
         filename=context["results_file"],
-        filemode='a',
-        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-        level=logging.INFO
+        filemode="a",
+        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+        level=logging.INFO,
     )
     logging.info("context: \n{}".format(context))
     training_data = data_cls_map[context["training_data_cls"]](context=context)
@@ -61,6 +62,7 @@ def main():
     trainer = Trainer(context=context, tracker=tracker)
     logging.info("Model: {}".format(model))
     trainer.train(model=model, training_data=training_data)
+
 
 if __name__ == "__main__":
     main()
