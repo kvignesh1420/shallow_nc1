@@ -1,13 +1,18 @@
 import logging
 
+from shallow_collapse.bulk_runner import BulkImbalancedRunnerFCN
 from shallow_collapse.utils import setup_runtime_context, parse_config
-from shallow_collapse.bulk_runner import BulkBalancedRunnerFCN
 
-
-TAU = 1e-8
-N_LIST = [128, 256, 512, 1024]
+N = 2048
+CLASS_SIZES_LIST = [
+    (512 * 2, 512 * 2),
+    (384 * 2, 640 * 2),
+    (256 * 2, 768 * 2),
+    (128 * 2, 896 * 2),
+]
 IN_FEATURES_LIST = [1, 2, 8, 32, 128]
 REPEAT = 10
+TAU = 1e-8
 
 
 def main():
@@ -21,9 +26,13 @@ def main():
     )
     logging.info("context: \n{}".format(context))
 
-    bulk_runner = BulkBalancedRunnerFCN(context=context)
+    bulk_runner = BulkImbalancedRunnerFCN(context=context)
     bulk_runner.run(
-        IN_FEATURES_LIST=IN_FEATURES_LIST, N_LIST=N_LIST, REPEAT=REPEAT, TAU=TAU
+        N=N,
+        CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+        IN_FEATURES_LIST=IN_FEATURES_LIST,
+        REPEAT=REPEAT,
+        TAU=TAU,
     )
 
 

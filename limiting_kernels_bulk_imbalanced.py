@@ -1,6 +1,9 @@
 import logging
 
-from shallow_collapse.bulk_runner import BulkImbalancedRunnerEoS
+from shallow_collapse.bulk_runner import (
+    BulkImbalancedRunnerNNGP,
+    BulkImbalancedRunnerNTK,
+)
 from shallow_collapse.utils import setup_runtime_context, parse_config
 
 N = 2048
@@ -26,14 +29,15 @@ def main():
     )
     logging.info("context: \n{}".format(context))
 
-    bulk_runner = BulkImbalancedRunnerEoS(context=context)
-    bulk_runner.run(
-        N=N,
-        CLASS_SIZES_LIST=CLASS_SIZES_LIST,
-        IN_FEATURES_LIST=IN_FEATURES_LIST,
-        REPEAT=REPEAT,
-        TAU=TAU,
-    )
+    for bulk_runner_cls in [BulkImbalancedRunnerNNGP, BulkImbalancedRunnerNTK]:
+        bulk_runner = bulk_runner_cls(context=context)
+        bulk_runner.run(
+            N=N,
+            CLASS_SIZES_LIST=CLASS_SIZES_LIST,
+            IN_FEATURES_LIST=IN_FEATURES_LIST,
+            REPEAT=REPEAT,
+            TAU=TAU,
+        )
 
 
 if __name__ == "__main__":

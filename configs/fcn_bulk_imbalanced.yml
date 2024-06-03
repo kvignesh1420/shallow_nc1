@@ -3,15 +3,25 @@ training_data_cls: Gaussian2DNL
 class_means:
   - -2
   - 2
-class_stds:
+class_stds: 
   - 0.5
   - 0.5
 L: 2
-hidden_features: na
+in_features: 1
+hidden_features: 500
 out_features: 1
 num_classes: 2
+use_batch_norm: false
+lr: 0.001
+momentum: 0.0
+weight_decay: 0.000001
 bias_std: 0
 hidden_weight_std: 1
 final_weight_std: 1.97
 activation: erf
+probe_features: true
+probe_kernels: false
+probe_weights: false
+num_epochs: 1000
+probing_frequency: 1000
 use_cache: false
