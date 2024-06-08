@@ -1,8 +1,16 @@
 # Neural Collapse in Shallow Neural Networks
 
-This effort aims to analyze the extent of neural collapse in shallow neural networks via kernel based analysis. Especially, we leverage the NNGP and NTK characterizations of a 2-layer fully connected neural network and analyze NC1 based on the kernel matrices.
+This repository provides a comprehensive analysis of neural collapse in shallow neural networks through a kernel-based approach. Our study focuses on the:
+
+- Limiting Neural Network Gaussian Process (NNGP)
+- Limiting Neural Tangent Kernel (NTK)
+- Adaptive Kernels (derived from NNGP)
+
+We utilize these kernel characterizations of a 2-layer fully connected neural network (2L-FCN) to investigate NC1, which refers to the variability collapse of hidden layer activations.
 
 ## Setup
+
+To set up the environment, follow these steps:
 
 ```bash
 $ python3.9 -m virtualenv .venv
@@ -12,21 +20,71 @@ $ pip install -r requirements.txt
 
 ## Experiments
 
-The `shallow_collapse` package contains the library code for running the experiments.
+The `shallow_collapse` package includes the core library code required to run the experiments.
 
-1. The `fcn.py` script can be used to run single 2L-FCN experiments.
+### Training the Fully Connected Network (FCN)
 
-2. The `fcn_bulk_balanced.py` script can be used to run multiple 2L-FCN experiments with varying dataset sizes and data dimension.
+- **Single run:** Train a 2L-FCN using the following command:
 
-3. The `fcn_bulk_imbalanced.py` script can be used to run multiple 2L-FCN experiments with imbalanced class sizes and data dimension.
+  ```bash
+  (.venv) $ python fcn.py configs/fcn.yml
+  ```
 
-4. Similar description applies to `limiting_kernels_bulk_balanced.py` and `limiting_kernels_bulk_imbalanced.py` for NNGP/NTK.
+- **Bulk run (balanced):** Train multiple 2L-FCN on various dataset sizes and data dimensions under balanced conditions:
 
-5. Similar description applies to `adaptive_kernels_bulk_balanced.py` and `adaptive_kernels_bulk_imbalanced.py` for EoS based adaptive kernels.
+  ```bash
+  (.venv) $ python fcn_bulk_balanced.py configs/fcn_bulk_balanced.yml
+  ```
 
-- To run the experiment, use:
-```bash
-(.venv) $ python fcn.py configs/fcn.yml
+- **Bulk run (imbalanced):** Train multiple 2L-FCN on various dataset sizes and data dimensions under imbalanced conditions:
+
+  ```bash
+  (.venv) $ python fcn_bulk_imbalanced.py configs/fcn_bulk_imbalanced.yml
+  ```
+
+### Limiting Kernels
+
+- **Bulk run (balanced):** Conduct multiple experiments using NNGP/NTK with balanced datasets:
+
+  ```bash
+  (.venv) $ python limiting_kernels_bulk_balanced.py configs/limiting_kernels_bulk_balanced.yml
+  ```
+
+- **Bulk run (imbalanced):** Execute multiple experiments using NNGP/NTK with imbalanced datasets:
+
+  ```bash
+  (.venv) $ python limiting_kernels_bulk_imbalanced.py configs/limiting_kernels_bulk_imbalanced.yml
+  ```
+
+### Adaptive Kernels
+
+- **Single run:** Solve the "Equations of State" (EoS) for the adaptive kernels using the following command:
+
+  ```bash
+  (.venv) $ python adaptive_kernels.py configs/adaptive_kernels.yml
+  ```
+
+- **Bulk run (balanced):** Perform multiple experiments using EoS-based adaptive kernels with balanced datasets:
+
+  ```bash
+  (.venv) $ python adaptive_kernels_bulk_balanced.py configs/adaptive_kernels_bulk_balanced.yml
+  ```
+
+- **Bulk run (imbalanced):** Run multiple experiments using EoS-based adaptive kernels with imbalanced datasets:
+
+  ```bash
+  (.venv) $ python adaptive_kernels_bulk_imbalanced.py configs/adaptive_kernels_bulk_imbalanced.yml
+  ```
+
+_All output files are stored in the `out/` directory. Each output is associated with a unique hash value corresponding to the context of the experiment._
+
+## Citation
+
+```bibtex
+@article{kothapalli2024kernel,
+  title={Kernel vs. Kernel: Exploring How the Data Structure Affects Neural Collapse},
+  author={Kothapalli, Vignesh and Tirer, Tom},
+  journal={arXiv preprint arXiv:2406.02105},
+  year={2024}
+}
 ```
-
-- The outputs are generated in the `out/` folder based on a hash value corresponding to the context.
