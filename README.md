@@ -81,8 +81,7 @@ _All output files are stored in the `out/` directory. Each output is associated 
 ## Citation
 
 ```bibtex
-@article{
-  kothapalli2025can,
+@article{kothapalli2025can,
   title={Can Kernel Methods Explain How the Data Affects Neural Collapse?},
   author={Vignesh Kothapalli and Tom Tirer},
   journal={Transactions on Machine Learning Research},
