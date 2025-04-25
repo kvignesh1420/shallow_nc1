@@ -81,10 +81,14 @@ _All output files are stored in the `out/` directory. Each output is associated 
 ## Citation
 
 ```bibtex
-@article{kothapalli2024kernel,
-  title={Kernel vs. Kernel: Exploring How the Data Structure Affects Neural Collapse},
-  author={Kothapalli, Vignesh and Tirer, Tom},
-  journal={arXiv preprint arXiv:2406.02105},
-  year={2024}
+@article{
+  kothapalli2025can,
+  title={Can Kernel Methods Explain How the Data Affects Neural Collapse?},
+  author={Vignesh Kothapalli and Tom Tirer},
+  journal={Transactions on Machine Learning Research},
+  issn={2835-8856},
+  year={2025},
+  url={https://openreview.net/forum?id=MbF1gYfIlY},
+  note={}
 }
 ```

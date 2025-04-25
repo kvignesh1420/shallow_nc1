@@ -6,11 +6,13 @@ import math
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import numpy as np
 
 plt.rcParams.update(
     {
         "font.size": 15,
         "axes.linewidth": 2,
+        "axes.labelsize": 18,
     }
 )
 from tqdm import tqdm
@@ -49,10 +51,13 @@ class Trainer:
         if self.context["out_features"] == 1:
             pred = model(training_data.X)
             pred = pred[training_data.perm_inv].detach().cpu().numpy()
-            plt.plot(pred)
+            sign_pred = np.sign(pred)
+            plt.plot(sign_pred)
+            plt.xlabel("sample index")
+            plt.ylabel("sign pred")
             plt.grid(True)
             plt.tight_layout()
-            plt.savefig("{}pred.jpg".format(self.context["vis_dir"]))
+            plt.savefig("{}sign_pred.jpg".format(self.context["vis_dir"]))
             plt.clf()
 
     def plot_results(self, model, training_data):
